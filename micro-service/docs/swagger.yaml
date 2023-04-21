@@ -1,0 +1,320 @@
+definitions:
+  common.Response:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+  user.AuthUserInfo:
+    properties:
+      created_at:
+        type: integer
+      deleted:
+        type: boolean
+      email_verification_code:
+        type: string
+      email_verified:
+        type: boolean
+      id:
+        description: email
+        type: string
+      last_logged_in_at:
+        type: integer
+      mobile_number:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      password_reset_code:
+        type: string
+      password_reset_requested:
+        type: boolean
+      role:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      token:
+        description: used to make sure only one session is allowed for one user
+        type: string
+      updated_at:
+        description: update time neglecting updates to login time
+        type: integer
+    type: object
+  user.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+      redirect_url:
+        description: url of frontend page where new password can be typed. Password
+          reset code will be sent as a query param to this url in a GET request
+        type: string
+    required:
+    - email
+    - redirect_url
+    type: object
+  user.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  user.LoginResponse:
+    properties:
+      name:
+        type: string
+      token:
+        type: string
+    type: object
+  user.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      password_confirm:
+        type: string
+      redirect_url:
+        description: url of frontend page where password verification status will
+          be displayed. Verification code will be sent as a query param to this url
+          in a GET request
+        type: string
+    required:
+    - email
+    - name
+    - password
+    - password_confirm
+    - redirect_url
+    type: object
+  user.ResetPasswordRequest:
+    properties:
+      data:
+        type: string
+      password:
+        type: string
+      password_confirm:
+        type: string
+    required:
+    - data
+    - password
+    - password_confirm
+    type: object
+  user.UpdatePasswordRequest:
+    properties:
+      password:
+        type: string
+      password_confirm:
+        type: string
+    required:
+    - password
+    - password_confirm
+    type: object
+  user.UpdateUserRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  user.VerifyRequest:
+    properties:
+      data:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /user/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Forgot password
+      parameters:
+      - description: email
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/user.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/common.Response'
+      summary: Forgot password
+      tags:
+      - User
+  /user/info:
+    post:
+      description: Get authenticated user's info
+      parameters:
+      - description: 'Example: Bearer _token_'
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.AuthUserInfo'
+      summary: User info
+      tags:
+      - User
+  /user/login:
+    post:
+      consumes:
+      - application/json
+      description: Login user
+      parameters:
+      - description: User data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/user.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.LoginResponse'
+      summary: Login user
+      tags:
+      - User
+  /user/register:
+    post:
+      consumes:
+      - application/json
+      description: Register user
+      parameters:
+      - description: User data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/user.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/common.Response'
+      summary: Register user
+      tags:
+      - User
+  /user/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset password
+      parameters:
+      - description: reset password data
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/user.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/common.Response'
+      summary: Reset password
+      tags:
+      - User
+  /user/update-info:
+    post:
+      consumes:
+      - application/json
+      description: Update user info
+      parameters:
+      - description: update user info data
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/user.UpdateUserRequest'
+      - description: 'Example: Bearer _token_'
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/common.Response'
+      summary: Update user info
+      tags:
+      - User
+  /user/update-password:
+    post:
+      consumes:
+      - application/json
+      description: Update password
+      parameters:
+      - description: update password data
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/user.UpdatePasswordRequest'
+      - description: 'Example: Bearer _token_'
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/common.Response'
+      summary: Update password
+      tags:
+      - User
+  /user/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: Verify email
+      parameters:
+      - description: data
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/user.VerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/common.Response'
+      summary: Verify email
+      tags:
+      - User
+swagger: "2.0"
