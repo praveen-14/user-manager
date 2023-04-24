@@ -79,9 +79,11 @@ func (db *MongoDB) UpdateUser(updates models.User, tagsToAdd, tagsToRemove []str
 	coll := db.DB.Collection(UsersColName)
 	filter := bson.D{{Key: "_id", Value: updates.ID}}
 	update := encode(updates)
-	update["$addToSet"] = map[string]any{"tags": map[string]any{"$each": tagsToAdd}}
-	update["$pull"] = map[string]any{"list": map[string]any{"$in": tagsToRemove}}
-	_, err := coll.UpdateOne(context.TODO(), filter, map[string]any{"$set": update})
+	full_update := map[string]any{}
+	full_update["$addToSet"] = map[string]any{"tags": map[string]any{"$each": tagsToAdd}}
+	full_update["$pull"] = map[string]any{"list": map[string]any{"$in": tagsToRemove}}
+	full_update["$set"] = update
+	_, err := coll.UpdateOne(context.TODO(), filter, full_update)
 	if err != nil {
 		db.Logger.Print("FAIL", fmt.Sprintf("updating user failed, id = %s [ERR=%s]", *updates.ID, err))
 		return database.ErrBadParams
