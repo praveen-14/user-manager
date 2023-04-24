@@ -310,7 +310,7 @@ func (api *Api) UpdatePassword(c *gin.Context) {
 		}
 	}
 
-	common.Respond(c, api.loggingService, http.StatusOK, "Successfully updated password!")
+	common.Respond(c, api.loggingService, http.StatusOK, "Successfully updated password!", "")
 }
 
 // @Summary 	Update user info
@@ -320,7 +320,7 @@ func (api *Api) UpdatePassword(c *gin.Context) {
 // @Produce  	json
 // @Param       data   					body      	UpdateUserRequest		true  	"update user info data"
 // @Param 		Authorization 			header 		string 						true 	"Example: Bearer _token_"
-// @Success 	200 					{object} 	common.Response
+// @Success 	200 					{object} 	common.Response[UpdateUserRequest]
 // @Router 		/user/update-info 		[post]
 func (api *Api) UpdateInfo(c *gin.Context) {
 

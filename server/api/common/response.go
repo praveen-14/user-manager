@@ -12,9 +12,9 @@ import (
 
 type (
 	Response struct {
-		Code    int         `json:"code,omitempty"`
-		Message string      `json:"message,omitempty"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+		Data    any    `json:"data,omitempty"`
 	}
 )
 
@@ -27,18 +27,11 @@ func (res *Response) Dump(logger *logger.Service) []byte {
 	return b
 }
 
-func Respond(c *gin.Context, logger *logger.Service, code int, message string, data ...interface{}) {
+func Respond(c *gin.Context, logger *logger.Service, code int, message string, data any) {
 	resp := &Response{
 		Code:    code,
 		Message: message,
-	}
-
-	if len(data) > 0 {
-		if len(data) > 1 {
-			resp.Data = data
-		} else {
-			resp.Data = data[0]
-		}
+		Data:    data,
 	}
 
 	buf := bytes.Buffer{}
