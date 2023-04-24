@@ -145,8 +145,14 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 		Tags:                  utils.ToPointer([]string{}),
 	}
 
-	err = service.db.AddUser(user)
+	err = service.emailService.SendVerificationCode(tokenStr, *user.EmailVerificationCode, *user.ID, *user.Name, req.RedirectURL)
+	if err != nil {
+		// if this fails, user added in previous step should be removed. Ideally this step should not fail if the email address user have given is correct
+		service.loggingService.Print("FAIL", fmt.Sprintf("failed to email verification code [Email=%s]", *user.ID))
+		return err
+	}
 
+	err = service.db.AddUser(user)
 	if err != nil {
 		if err == database.ErrConflict {
 			service.loggingService.Print("FAIL", fmt.Sprintf("user already exists [Email=%s]", *user.ID))
@@ -155,14 +161,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 		return err
 	}
 
-	err = service.emailService.SendVerificationCode(tokenStr, *user.EmailVerificationCode, *user.ID, *user.Name, req.RedirectURL)
-	if err != nil {
-		// if this fails, user added in previous step should be removed. Ideally this step should not fail if the email address user have given is correct
-		service.loggingService.Print("FAIL", fmt.Sprintf("failed to email verification code [Email=%d]", user.ID))
-		return err
-	}
-
-	service.loggingService.Print("INFO", fmt.Sprintf("user registration successful [Email=%d]", user.ID))
+	service.loggingService.Print("INFO", fmt.Sprintf("user registration successful [Email=%s]", *user.ID))
 
 	return nil
 

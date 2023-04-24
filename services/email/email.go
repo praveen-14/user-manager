@@ -2,6 +2,7 @@ package email
 
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"html/template"
 	"os"
@@ -21,6 +22,9 @@ import (
 var (
 	instance *Service
 	once     sync.Once
+
+	//go:embed templates
+	templates embed.FS
 )
 
 type (
@@ -37,7 +41,10 @@ func New() (*Service, error) {
 		instance = &Service{
 			loggingService: logger.New("email-service", 0),
 		}
-		err = instance.ParseTemplateDir(config.EMAIL_TEMPLATE_DIR)
+		instance.Template, err = instance.Template.ParseFS(templates, "templates/**.html")
+		if err != nil {
+			panic(err)
+		}
 	})
 	return instance, err
 }
@@ -77,13 +84,14 @@ func (service *Service) SendVerificationCode(token string, code string, email st
 		"BtnText":   "Verify your account",
 		"ORG_NAME":  config.ORG_NAME,
 	}
-	fmt.Println(data)
 
 	err := service.Template.ExecuteTemplate(&body, "body.html", data)
 	if err != nil {
 		service.loggingService.Print("FAIL", fmt.Sprintf("failed to load body.html template. err = %s", err))
 		return err
 	}
+
+	fmt.Println(body.String())
 
 	from := mail.NewEmail(config.FROM_NAME, config.FROM_EMAIL)
 	subject := fmt.Sprintf("Your Verification Code for %s", config.ORG_NAME)

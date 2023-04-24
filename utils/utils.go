@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 
 	"github.com/gin-gonic/gin"
 )
@@ -72,4 +74,20 @@ func GetValue[T any](c *gin.Context, key string) T {
 		panic(fmt.Sprintf("key '%s' not found in context", key))
 	}
 	return v.(T)
+}
+
+func GetAllFilenames(efs *embed.FS) (files []string, err error) {
+	if err := fs.WalkDir(efs, ".", func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+
+		files = append(files, path)
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return files, nil
 }

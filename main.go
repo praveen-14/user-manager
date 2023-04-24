@@ -1,18 +1,16 @@
 package main
 
 import (
-	"flag"
 	"log"
 
-	"github.com/praveen-14/user-manager/config"
 	"github.com/praveen-14/user-manager/database/mongodb"
 	"github.com/praveen-14/user-manager/server"
 )
 
-func init() {
-	flag.StringVar(&config.EMAIL_TEMPLATE_DIR, "templatedir", config.EMAIL_TEMPLATE_DIR, "Directory containing the email templates")
-	flag.Parse()
-}
+// func init() {
+// 	flag.StringVar(&config.EMAIL_TEMPLATE_DIR, "templatedir", config.EMAIL_TEMPLATE_DIR, "Directory containing the email templates")
+// 	flag.Parse()
+// }
 
 func main() {
 	db, err := mongodb.New()
