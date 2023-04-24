@@ -3,9 +3,10 @@ package main
 import (
 	"flag"
 	"log"
-	"user-manager/config"
-	"user-manager/database/mongodb"
-	"user-manager/server"
+
+	"github.com/praveen-14/user-manager/config"
+	"github.com/praveen-14/user-manager/database/mongodb"
+	"github.com/praveen-14/user-manager/server"
 )
 
 func init() {

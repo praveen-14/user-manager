@@ -2,7 +2,8 @@ package token
 
 import (
 	"strings"
-	"user-manager/config"
+
+	"github.com/praveen-14/user-manager/config"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"

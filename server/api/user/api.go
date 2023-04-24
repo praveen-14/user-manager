@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"user-manager/database"
-	"user-manager/database/models"
-	"user-manager/server/api/common"
-	"user-manager/services/logger"
-	userServiceMod "user-manager/services/user"
-	"user-manager/utils"
+
+	"github.com/praveen-14/user-manager/database"
+	"github.com/praveen-14/user-manager/database/models"
+	"github.com/praveen-14/user-manager/server/api/common"
+	"github.com/praveen-14/user-manager/services/logger"
+	userServiceMod "github.com/praveen-14/user-manager/services/user"
+	"github.com/praveen-14/user-manager/utils"
 
 	"github.com/gin-gonic/gin"
 )

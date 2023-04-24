@@ -1,7 +1,7 @@
 package user
 
 import (
-	"user-manager/database/models"
+	"github.com/praveen-14/user-manager/database/models"
 
 	jwt "github.com/golang-jwt/jwt/v4"
 )

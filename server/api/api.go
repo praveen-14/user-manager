@@ -2,10 +2,11 @@ package api
 
 import (
 	"sync"
-	"user-manager/database"
-	"user-manager/docs"
-	userApi "user-manager/server/api/user"
-	"user-manager/services/logger"
+
+	"github.com/praveen-14/user-manager/database"
+	"github.com/praveen-14/user-manager/docs"
+	userApi "github.com/praveen-14/user-manager/server/api/user"
+	"github.com/praveen-14/user-manager/services/logger"
 
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"

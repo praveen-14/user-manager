@@ -5,7 +5,8 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"user-manager/services/logger"
+
+	"github.com/praveen-14/user-manager/services/logger"
 
 	"github.com/gin-gonic/gin"
 )

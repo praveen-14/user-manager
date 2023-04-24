@@ -1,8 +1,8 @@
 package database
 
 import (
-	"user-manager/database/models"
-	utils "user-manager/utils"
+	"github.com/praveen-14/user-manager/database/models"
+	utils "github.com/praveen-14/user-manager/utils"
 )
 
 const (

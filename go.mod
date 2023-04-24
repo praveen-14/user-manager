@@ -1,8 +1,6 @@
-module user-manager
+module github.com/praveen-14/user-manager
 
 go 1.18
-
-replace user-manager => ./
 
 require (
 	github.com/arangodb/go-driver v1.3.2

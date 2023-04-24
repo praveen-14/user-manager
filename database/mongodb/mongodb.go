@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"user-manager/config"
-	"user-manager/database"
-	"user-manager/database/models"
-	"user-manager/services/logger"
-	"user-manager/utils"
+
+	"github.com/praveen-14/user-manager/config"
+	"github.com/praveen-14/user-manager/database"
+	"github.com/praveen-14/user-manager/database/models"
+	"github.com/praveen-14/user-manager/services/logger"
+	"github.com/praveen-14/user-manager/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

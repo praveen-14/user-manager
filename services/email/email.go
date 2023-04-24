@@ -7,9 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"user-manager/config"
-	"user-manager/services/logger"
-	"user-manager/utils"
+
+	"github.com/praveen-14/user-manager/config"
+	"github.com/praveen-14/user-manager/utils"
+
+	"github.com/praveen-14/user-manager/services/logger"
 
 	"github.com/k3a/html2text"
 	"github.com/sendgrid/sendgrid-go"

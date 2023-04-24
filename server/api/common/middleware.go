@@ -2,10 +2,11 @@ package common
 
 import (
 	"net/http"
-	"user-manager/database/models"
-	"user-manager/services/token"
-	userService "user-manager/services/user"
-	"user-manager/utils"
+
+	"github.com/praveen-14/user-manager/database/models"
+	"github.com/praveen-14/user-manager/services/token"
+	userService "github.com/praveen-14/user-manager/services/user"
+	"github.com/praveen-14/user-manager/utils"
 
 	"github.com/gin-gonic/gin"
 )

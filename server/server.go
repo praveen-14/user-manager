@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"user-manager/config"
-	"user-manager/database"
-	"user-manager/server/api"
-	"user-manager/services/logger"
+	"github.com/praveen-14/user-manager/config"
+	"github.com/praveen-14/user-manager/database"
+	"github.com/praveen-14/user-manager/server/api"
+	"github.com/praveen-14/user-manager/services/logger"
 )
 
 const (
