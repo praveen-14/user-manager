@@ -153,6 +153,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 		Password:              utils.ToPointer(string(hashedPassword)),
 		EmailVerificationCode: utils.ToPointer(verificationCode),
 		Tags:                  utils.ToPointer([]string{}),
+		Data:                  utils.ToPointer(req.Data),
 	}
 
 	err = service.emailService.SendVerificationCode(tokenStr, *user.EmailVerificationCode, *user.ID, *user.Name, req.RedirectURL)

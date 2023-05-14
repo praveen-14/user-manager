@@ -104,3 +104,7 @@ func GetUniqueValues(arr []string) []string {
 	}
 	return out
 }
+
+func PrintObj(v any) {
+	fmt.Printf("%+v", v)
+}

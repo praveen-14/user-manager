@@ -116,7 +116,7 @@ func (db *MongoDB) GetUser(id string) (user models.User, err error) {
 func (db *MongoDB) GetUsers(ids []string) (out <-chan *models.User, err error) {
 	filters := []bson.D{}
 	for _, id := range ids {
-		filters = append(filters, bson.D{{Key: "id", Value: id}})
+		filters = append(filters, bson.D{{Key: "_id", Value: id}})
 	}
 	filter := bson.D{{Key: "$or", Value: filters}}
 
