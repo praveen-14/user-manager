@@ -10,6 +10,7 @@ const (
 	ErrConflict       = utils.ConstError("conflicts with already existing record")
 	ErrNotFound       = utils.ConstError("not found")
 	ErrBadParams      = utils.ConstError("parameters not identified")
+	ErrUnidentified   = utils.ConstError("strange error occurred :O")
 
 	OrderAsc  Order = "ASC"
 	OrderDesc Order = "DESC"
@@ -40,6 +41,7 @@ type (
 
 		// ErrNotFound is returned if not found
 		GetUser(id string) (models.User, error)
+		GetUsers(ids []string) (<-chan *models.User, error)
 
 		ReadUsers(req ReadUsersRequest) (ReadUsersResponse, error) // total is not returned. Total can be fetched from a different API
 	}
@@ -54,7 +56,7 @@ type (
 		CreatedFrom int64
 		CreatedTo   int64
 		SortOrder   Order
-		Tags        []string
+		Tags        []string // returns only the users which have all the tags included here (ie. acts as AND gate: tag1 AND tag2)
 	}
 
 	ReadResponse[T any] struct {

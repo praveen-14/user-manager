@@ -96,16 +96,56 @@ func (db *MongoDB) GetUser(id string) (user models.User, err error) {
 	filter := bson.D{{Key: "_id", Value: id}}
 	data, err := coll.FindOne(context.TODO(), filter).DecodeBytes()
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			db.Logger.Print("INFO", fmt.Sprintf("user does not exist, id = %s", *user.ID))
+			return user, database.ErrNotFound
+		}
 		db.Logger.Print("FAIL", fmt.Sprintf("getting user failed, id = %s [ERR=%s]", *user.ID, err))
-		return user, database.ErrConflict
+		return user, database.ErrUnidentified
 	}
 	m := make(map[string]any)
 	err = bson.Unmarshal(data, &m)
 	if err != nil {
-		panic(fmt.Sprintf("getting user failed (unmarshalling), id = %s [ERR=%s]", *user.ID, err))
+		db.Logger.Print("FAIL", fmt.Sprintf("getting user failed (unmarshalling), id = %s [ERR=%s]", *user.ID, err))
+		return user, database.ErrUnidentified
 	}
 	decode(m, &user)
 	return user, nil
+}
+
+func (db *MongoDB) GetUsers(ids []string) (out <-chan *models.User, err error) {
+	filters := []bson.D{}
+	for _, id := range ids {
+		filters = append(filters, bson.D{{Key: "id", Value: id}})
+	}
+	filter := bson.D{{Key: "$or", Value: filters}}
+
+	dataChan := make(chan *models.User, channelCapacity)
+
+	go func() {
+		defer close(dataChan)
+
+		coll := db.DB.Collection(UsersColName)
+		cur, err := coll.Find(context.TODO(), filter)
+		if err != nil {
+			db.Logger.Print("FAIL", fmt.Sprintf("getting users failed, ids = %+v [ERR=%s]", ids, err))
+			return
+		}
+
+		for cur.Next(context.TODO()) {
+			user := &models.User{}
+			m := make(map[string]any)
+			err := bson.Unmarshal(cur.Current, &m)
+			if err != nil {
+				db.Logger.Fatalf("reading users [ERR: %s]", err)
+			}
+			decode(m, user)
+			dataChan <- user
+		}
+
+	}()
+
+	return dataChan, nil
 }
 
 func (db *MongoDB) ReadUsers(req database.ReadUsersRequest) (res database.ReadUsersResponse, err error) {

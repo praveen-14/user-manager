@@ -96,6 +96,15 @@ func (service *Service) GetUser(req GetUserRequest) (user models.User, err error
 	return user, nil
 }
 
+func (service *Service) GetUsers(req GetUsersRequest) (data <-chan *models.User, err error) {
+	users, err := service.db.GetUsers(req.UserIDs)
+	if err != nil {
+		service.loggingService.Print("FAIL", fmt.Sprintf("failed to get users from database. [IDs=%+v] [Err=%s]", req.UserIDs, err))
+		return data, err
+	}
+	return users, nil
+}
+
 func (service *Service) ValidateSession(req ValidateSessionRequest) (user models.User, isValid bool, err error) {
 	user, err = service.GetUser(GetUserRequest{UserID: req.UserID})
 	if err != nil {
@@ -137,6 +146,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 		ID:                    utils.ToPointer(email),
 		Name:                  utils.ToPointer(strings.ToLower(req.Name)),
 		EmailVerified:         utils.ToPointer(false),
+		MobileNumber:          utils.ToPointer(req.MobileNumber),
 		CreatedAt:             utils.ToPointer(now.UnixMilli()),
 		UpdatedAt:             utils.ToPointer(now.UnixMilli()),
 		Deleted:               utils.ToPointer(false),
@@ -240,6 +250,7 @@ func (service *Service) VerifyEmail(req VerifyRequest) (err error) {
 	}
 
 	if *user.EmailVerificationCode != claims.VerificationCode {
+		service.loggingService.Print("FAIL", "codes does not match %d vs %d", user.EmailVerificationCode, claims.VerificationCode)
 		return ErrIncorrectValidationCode
 	}
 

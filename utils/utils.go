@@ -91,3 +91,16 @@ func GetAllFilenames(efs *embed.FS) (files []string, err error) {
 
 	return files, nil
 }
+
+func GetUniqueValues(arr []string) []string {
+	out := make([]string, 0)
+	found := map[string]bool{}
+	for _, item := range arr {
+		_, ok := found[item]
+		if !ok {
+			out = append(out, item)
+			found[item] = true
+		}
+	}
+	return out
+}

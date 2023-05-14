@@ -20,7 +20,7 @@ func main() {
 
 	server, err := server.New(db)
 	if err != nil {
-		log.Fatal("failed to start server", err)
+		log.Fatalf("failed to start server [ERR: %s]", err)
 	}
 
 	server.Run()

@@ -15,6 +15,10 @@ type (
 		UserID string
 	}
 
+	GetUsersRequest struct {
+		UserIDs []string
+	}
+
 	ValidateSessionRequest struct {
 		UserID string
 		Token  string
@@ -23,8 +27,10 @@ type (
 	RegisterRequest struct {
 		Email           string
 		Name            string
+		MobileNumber    string
 		Password        string
 		PasswordConfirm string
+		Data            map[string]any
 		RedirectURL     string
 	}
 
