@@ -2,13 +2,12 @@ package user
 
 type (
 	RegisterRequest struct {
-		Email           string         `json:"email" binding:"required"`
-		Name            string         `json:"name" binding:"required"`
-		MobileNumber    string         `json:"mobile_number" binding:"required"`
-		Password        string         `json:"password" binding:"required"`
-		PasswordConfirm string         `json:"password_confirm" binding:"required"`
-		Data            map[string]any `json:"data" binding:"required"`
-		RedirectURL     string         `json:"redirect_url" binding:"required"` // url of frontend page where password verification status will be displayed. Verification code will be sent as a query param to this url in a GET request
+		Email           string `json:"email" binding:"required"`
+		Name            string `json:"name" binding:"required"`
+		MobileNumber    string `json:"mobile_number" binding:"required"`
+		Password        string `json:"password" binding:"required"`
+		PasswordConfirm string `json:"password_confirm" binding:"required"`
+		RedirectURL     string `json:"redirect_url" binding:"required"` // url of frontend page where password verification status will be displayed. Verification code will be sent as a query param to this url in a GET request
 	}
 
 	LoginRequest struct {

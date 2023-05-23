@@ -7,7 +7,7 @@ import (
 
 	"github.com/praveen-14/user-manager/database"
 	"github.com/praveen-14/user-manager/database/models"
-	"github.com/praveen-14/user-manager/server/api/common"
+	userMiddleware "github.com/praveen-14/user-manager/server/api/middleware/user"
 	"github.com/praveen-14/user-manager/services/logger"
 	userServiceMod "github.com/praveen-14/user-manager/services/user"
 	"github.com/praveen-14/user-manager/utils"
@@ -21,7 +21,8 @@ var (
 )
 
 type Api struct {
-	userService *userServiceMod.Service
+	userService   *userServiceMod.Service
+	userMiddleare *userMiddleware.Middleware
 
 	loggingService *logger.Service
 }
@@ -29,14 +30,22 @@ type Api struct {
 func New(db database.Database) (*Api, error) {
 	var err error
 	once.Do(func() {
-		if userService, err1 := userServiceMod.New(db); err1 != nil {
+		userService, err1 := userServiceMod.New(db)
+		if err1 != nil {
 			err = err1
 			return
-		} else {
-			instance = &Api{
-				loggingService: logger.New("user-api", 0),
-				userService:    userService,
-			}
+		}
+
+		userMiddleware, err1 := userMiddleware.New(db)
+		if err1 != nil {
+			err = err1
+			return
+		}
+
+		instance = &Api{
+			loggingService: logger.New("user-api", 0),
+			userService:    userService,
+			userMiddleare:  userMiddleware,
 		}
 
 	})
@@ -54,10 +63,10 @@ func (api *Api) AddRoutesTo(router *gin.RouterGroup) {
 		routerGrp.POST("/verify-email", func(c *gin.Context) { api.VerifyEmail(c) })
 
 		// apis added after this middleware cannot be invoked without logging in
-		routerGrp.Use(common.AuthMiddlewareGene(api.userService))
+		routerGrp.Use(api.userMiddleare.GenAuthorizer(userMiddleware.GenAuthorizerRequest{}))
 
 		// apis added after this middleware cannot be invoked without verifying the email
-		routerGrp.Use(common.VerifyMiddleware)
+		routerGrp.Use(api.userMiddleare.VerifyMiddleware)
 
 		routerGrp.POST("/info", func(c *gin.Context) { api.UserInfo(c) })
 		routerGrp.POST("/update-password", func(c *gin.Context) { api.UpdatePassword(c) })
@@ -71,30 +80,37 @@ func (api *Api) AddRoutesTo(router *gin.RouterGroup) {
 // @Accept  	json
 // @Produce  	json
 // @Param       user   				body      	RegisterRequest 	true  	"User data"
-// @Success 	200 				{object} 	common.Response
+// @Success 	200 				{object} 	utils.Response
 // @Router 		/user/register 		[post]
 func (api *Api) RegisterUser(c *gin.Context) {
 
 	var req RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
+		utils.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
 		return
 	}
 
-	if err := api.userService.RegisterUser(userServiceMod.RegisterRequest(req)); err != nil {
+	if err := api.userService.RegisterUser(userServiceMod.RegisterRequest{
+		Email:           req.Email,
+		Name:            req.Name,
+		MobileNumber:    req.MobileNumber,
+		Password:        req.Password,
+		PasswordConfirm: req.PasswordConfirm,
+		RedirectURL:     req.RedirectURL,
+	}); err != nil {
 		if err == userServiceMod.ErrPasswordDoesNotMatch {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "Password doesn't match", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Password doesn't match", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else if err == userServiceMod.ErrUserExists {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "User already exists!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User already exists!", utils.GetJsonBodyFromGinContext(c))
 		} else {
-			common.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 			return
 		}
 	}
 
-	common.Respond(c, api.loggingService, http.StatusOK, "User registartion successful!", req)
+	utils.Respond(c, api.loggingService, http.StatusOK, "User registartion successful!", req)
 }
 
 // @Summary 	Login user
@@ -111,7 +127,7 @@ func (api *Api) LoginUser(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fmt.Print(err)
-		common.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
+		utils.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
 		return
 	}
 
@@ -128,16 +144,16 @@ func (api *Api) LoginUser(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case userServiceMod.ErrUserDoesNotExist:
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 		case userServiceMod.ErrIncorrectPassword:
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "Incorrect password!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Incorrect password!", utils.GetJsonBodyFromGinContext(c))
 		default:
-			common.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 		}
 		return
 	}
 
-	common.Respond(
+	utils.Respond(
 		c,
 		api.loggingService,
 		http.StatusOK,
@@ -163,11 +179,11 @@ func (api *Api) UserInfo(c *gin.Context) {
 
 	// user, err := api.userService.AuthUserInfo(userID)
 	// if err != nil {
-	// 	common.Respond(c, api.loggingService, http.StatusUnauthorized, "Unable to get user info!", ":0")
+	// 	utils.Respond(c, api.loggingService, http.StatusUnauthorized, "Unable to get user info!", ":0")
 	// 	return
 	// }
 
-	common.Respond(
+	utils.Respond(
 		c,
 		api.loggingService,
 		http.StatusOK,
@@ -182,7 +198,7 @@ func (api *Api) UserInfo(c *gin.Context) {
 // @Accept  	json
 // @Produce  	json
 // @Param       data   			body      	VerifyRequest		  	true  	"data"
-// @Success 	200 			{object} 	common.Response
+// @Success 	200 			{object} 	utils.Response
 // @Router 		/user/verify-email 	[post]
 func (api *Api) VerifyEmail(c *gin.Context) {
 
@@ -190,24 +206,24 @@ func (api *Api) VerifyEmail(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		api.loggingService.Print("FAIL", "request verification failed [ERR=%s]", err)
-		common.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
+		utils.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
 		return
 	}
 
 	err := api.userService.VerifyEmail(userServiceMod.VerifyRequest(req))
 	if err != nil {
 		if err == userServiceMod.ErrIncorrectValidationCode {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "Incorrect validation code", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Incorrect validation code", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else if err == userServiceMod.ErrUserDoesNotExist {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "User does not exist!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User does not exist!", utils.GetJsonBodyFromGinContext(c))
 		} else {
-			common.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 			return
 		}
 	}
 
-	common.Respond(c, api.loggingService, http.StatusOK, "Email verification successful!", req)
+	utils.Respond(c, api.loggingService, http.StatusOK, "Email verification successful!", req)
 }
 
 // @Summary 	Forgot password
@@ -216,28 +232,28 @@ func (api *Api) VerifyEmail(c *gin.Context) {
 // @Accept  	json
 // @Produce  	json
 // @Param       data   					body      	ForgotPasswordRequest		true  	"email"
-// @Success 	200 					{object} 	common.Response
+// @Success 	200 					{object} 	utils.Response
 // @Router 		/user/forgot-password 	[post]
 func (api *Api) ForgotPassword(c *gin.Context) {
 
 	var req ForgotPasswordRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
+		utils.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
 		return
 	}
 
 	if err := api.userService.ForgotPassword(userServiceMod.ForgotPasswordRequest(req)); err != nil {
 		if err == userServiceMod.ErrUserDoesNotExist {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else {
-			common.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 			return
 		}
 	}
 
-	common.Respond(c, api.loggingService, http.StatusOK, "Password reset code sent successfully!", req)
+	utils.Respond(c, api.loggingService, http.StatusOK, "Password reset code sent successfully!", req)
 }
 
 // @Summary 	Reset password
@@ -246,37 +262,37 @@ func (api *Api) ForgotPassword(c *gin.Context) {
 // @Accept  	json
 // @Produce  	json
 // @Param       data   					body      	ResetPasswordRequest		true  	"reset password data"
-// @Success 	200 					{object} 	common.Response
+// @Success 	200 					{object} 	utils.Response
 // @Router 		/user/reset-password 	[post]
 func (api *Api) ResetPassword(c *gin.Context) {
 
 	var req ResetPasswordRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
+		utils.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
 		return
 	}
 
 	if err := api.userService.ResetPassword(userServiceMod.ResetPasswordRequest(req)); err != nil {
 		if err == userServiceMod.ErrUserDoesNotExist {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else if err == userServiceMod.ErrIncorrectPasswordResetCode {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "Incorrect password reset code!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Incorrect password reset code!", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else if err == userServiceMod.ErrPasswordResetNotRequested {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "Password reset not requested!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Password reset not requested!", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else if err == userServiceMod.ErrPasswordDoesNotMatch {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "Passwords don't match", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Passwords don't match", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else {
-			common.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 			return
 		}
 	}
 
-	common.Respond(c, api.loggingService, http.StatusOK, "Successfully resetted password!", req)
+	utils.Respond(c, api.loggingService, http.StatusOK, "Successfully resetted password!", req)
 }
 
 // @Summary 	Update password
@@ -286,7 +302,7 @@ func (api *Api) ResetPassword(c *gin.Context) {
 // @Produce  	json
 // @Param       data   					body      	UpdatePasswordRequest		true  	"update password data"
 // @Param 		Authorization 			header 		string 						true 	"Example: Bearer _token_"
-// @Success 	200 					{object} 	common.Response
+// @Success 	200 					{object} 	utils.Response
 // @Router 		/user/update-password 	[post]
 func (api *Api) UpdatePassword(c *gin.Context) {
 
@@ -294,24 +310,24 @@ func (api *Api) UpdatePassword(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fmt.Print(err)
-		common.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
+		utils.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
 		return
 	}
 
 	if err := api.userService.UpdatePassword(userServiceMod.UpdatePasswordRequest{User: utils.GetValue[models.User](c, "user"), Password: req.Password, PasswordConfirm: req.PasswordConfirm}); err != nil {
 		if err == userServiceMod.ErrUserDoesNotExist {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else if err == userServiceMod.ErrPasswordDoesNotMatch {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "Passwords don't match", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Passwords don't match", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else {
-			common.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 			return
 		}
 	}
 
-	common.Respond(c, api.loggingService, http.StatusOK, "Successfully updated password!", "")
+	utils.Respond(c, api.loggingService, http.StatusOK, "Successfully updated password!", "")
 }
 
 // @Summary 	Update user info
@@ -321,7 +337,7 @@ func (api *Api) UpdatePassword(c *gin.Context) {
 // @Produce  	json
 // @Param       data   					body      	UpdateUserRequest		true  	"update user info data"
 // @Param 		Authorization 			header 		string 						true 	"Example: Bearer _token_"
-// @Success 	200 					{object} 	common.Response[UpdateUserRequest]
+// @Success 	200 					{object} 	utils.Response[UpdateUserRequest]
 // @Router 		/user/update-info 		[post]
 func (api *Api) UpdateInfo(c *gin.Context) {
 
@@ -329,19 +345,19 @@ func (api *Api) UpdateInfo(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fmt.Print(err)
-		common.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
+		utils.Respond(c, api.loggingService, http.StatusBadRequest, "User data validation failed!", utils.GetJsonBodyFromGinContext(c))
 		return
 	}
 
 	if err := api.userService.UpdateUser(userServiceMod.UpdateUserRequest{User: utils.GetValue[*models.User](c, "user"), Name: req.Name}); err != nil {
 		if err == userServiceMod.ErrUserDoesNotExist {
-			common.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 			return
 		} else {
-			common.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 			return
 		}
 	}
 
-	common.Respond(c, api.loggingService, http.StatusOK, "Successfully updated user info!", req)
+	utils.Respond(c, api.loggingService, http.StatusOK, "Successfully updated user info!", req)
 }

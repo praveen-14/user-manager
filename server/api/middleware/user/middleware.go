@@ -1,20 +1,53 @@
-package common
+package user
 
 import (
 	"net/http"
+	"sync"
 
+	"github.com/praveen-14/user-manager/database"
 	"github.com/praveen-14/user-manager/database/models"
+	"github.com/praveen-14/user-manager/services/logger"
 	"github.com/praveen-14/user-manager/services/token"
+	"github.com/praveen-14/user-manager/services/user"
 	userService "github.com/praveen-14/user-manager/services/user"
 	"github.com/praveen-14/user-manager/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddlewareGene(userServ *userService.Service) func(c *gin.Context) {
+var (
+	instance *Middleware
+	once     sync.Once
+)
+
+type Middleware struct {
+	userService *user.Service
+
+	loggingService *logger.Service
+}
+
+func New(db database.Database) (*Middleware, error) {
+	var err error
+	once.Do(func() {
+		userService, err1 := user.New(db)
+		if err1 != nil {
+			err = err1
+			return
+		}
+
+		instance = &Middleware{
+			loggingService: logger.New("user-middleware", 0),
+			userService:    userService,
+		}
+
+	})
+	return instance, err
+}
+
+func (middleware *Middleware) GenAuthorizer(req GenAuthorizerRequest) func(c *gin.Context) {
 
 	fn := func(c *gin.Context) {
-		user, authorized, _ := userServ.Authorize(userService.AuthorizeRequest{Token: token.ExtractToken(c)})
+		user, authorized, _ := middleware.userService.Authorize(userService.AuthorizeRequest{Token: token.ExtractToken(c), Role: req.Role})
 		if !authorized {
 			c.String(http.StatusUnauthorized, "token validation failed")
 			c.Abort()
@@ -28,7 +61,7 @@ func AuthMiddlewareGene(userServ *userService.Service) func(c *gin.Context) {
 	return fn
 }
 
-func VerifyMiddleware(c *gin.Context) {
+func (middleware *Middleware) VerifyMiddleware(c *gin.Context) {
 	user := utils.GetValue[models.User](c, "user")
 	if !*user.EmailVerified {
 		c.String(http.StatusUnauthorized, "Please verify your email")

@@ -71,12 +71,13 @@ func (service *Service) Authorize(req AuthorizeRequest) (user models.User, _ boo
 	user, authorized, err := service.ValidateSession(ValidateSessionRequest{
 		UserID: claims.UserID,
 		Token:  req.Token,
+		Role:   req.Role,
 	})
 
 	if authorized {
 		return user, true, nil
 	} else {
-		errStr := "token not allowed. only one session is allowed per user"
+		errStr := "authorization failed (possible causes\n - mutiple user logins\n - unmatched user role)"
 		service.loggingService.Print("FAIL", errStr)
 		return user, false, nil
 	}
@@ -111,7 +112,12 @@ func (service *Service) ValidateSession(req ValidateSessionRequest) (user models
 		return user, isValid, err
 	}
 	if *user.Token == req.Token {
-		isValid = true
+		if req.Role == "" {
+			isValid = true
+		}
+		if req.Role != "" && user.Role != nil && req.Role == *user.Role {
+			isValid = true
+		}
 	}
 	return user, isValid, nil
 }
@@ -144,6 +150,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 	email := strings.ToLower(req.Email)
 	user := models.User{
 		ID:                    utils.ToPointer(email),
+		Role:                  utils.ToPointer(req.Role),
 		Name:                  utils.ToPointer(strings.ToLower(req.Name)),
 		EmailVerified:         utils.ToPointer(false),
 		MobileNumber:          utils.ToPointer(req.MobileNumber),

@@ -9,6 +9,7 @@ import (
 type (
 	AuthorizeRequest struct {
 		Token string
+		Role  string
 	}
 
 	GetUserRequest struct {
@@ -22,10 +23,12 @@ type (
 	ValidateSessionRequest struct {
 		UserID string
 		Token  string
+		Role   string
 	}
 
 	RegisterRequest struct {
 		Email           string
+		Role            string
 		Name            string
 		MobileNumber    string
 		Password        string
