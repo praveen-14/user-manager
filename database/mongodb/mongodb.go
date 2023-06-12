@@ -97,16 +97,38 @@ func (db *MongoDB) GetUser(id string) (user models.User, err error) {
 	data, err := coll.FindOne(context.TODO(), filter).DecodeBytes()
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			db.Logger.Print("INFO", fmt.Sprintf("user does not exist, id = %s", *user.ID))
+			db.Logger.Print("INFO", fmt.Sprintf("user does not exist, id = %s", id))
 			return user, database.ErrNotFound
 		}
-		db.Logger.Print("FAIL", fmt.Sprintf("getting user failed, id = %s [ERR=%s]", *user.ID, err))
+		db.Logger.Print("FAIL", fmt.Sprintf("getting user failed, id = %s [ERR=%s]", id, err))
 		return user, database.ErrUnidentified
 	}
 	m := make(map[string]any)
 	err = bson.Unmarshal(data, &m)
 	if err != nil {
-		db.Logger.Print("FAIL", fmt.Sprintf("getting user failed (unmarshalling), id = %s [ERR=%s]", *user.ID, err))
+		db.Logger.Print("FAIL", fmt.Sprintf("getting user failed (unmarshalling), id = %s [ERR=%s]", id, err))
+		return user, database.ErrUnidentified
+	}
+	decode(m, &user)
+	return user, nil
+}
+
+func (db *MongoDB) GetUserByEmail(email string) (user models.User, err error) {
+	coll := db.DB.Collection(UsersColName)
+	filter := bson.D{{Key: "email", Value: email}}
+	data, err := coll.FindOne(context.TODO(), filter).DecodeBytes()
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			db.Logger.Print("INFO", fmt.Sprintf("user does not exist, email = %s", email))
+			return user, database.ErrNotFound
+		}
+		db.Logger.Print("FAIL", fmt.Sprintf("getting user failed, email = %s [ERR=%s]", email, err))
+		return user, database.ErrUnidentified
+	}
+	m := make(map[string]any)
+	err = bson.Unmarshal(data, &m)
+	if err != nil {
+		db.Logger.Print("FAIL", fmt.Sprintf("getting user failed (unmarshalling), email = %s [ERR=%s]", email, err))
 		return user, database.ErrUnidentified
 	}
 	decode(m, &user)

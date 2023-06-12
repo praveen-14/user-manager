@@ -16,6 +16,10 @@ type (
 		UserID string
 	}
 
+	GetUserByEmailRequest struct {
+		Email string
+	}
+
 	GetUsersRequest struct {
 		UserIDs []string
 	}
@@ -69,7 +73,7 @@ type (
 	}
 
 	ResetPasswordClaims struct {
-		UserEmail         string
+		Email             string
 		PasswordResetCode string
 		jwt.RegisteredClaims
 	}

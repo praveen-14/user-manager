@@ -97,6 +97,20 @@ func (service *Service) GetUser(req GetUserRequest) (user models.User, err error
 	return user, nil
 }
 
+func (service *Service) GetUserByEmail(req GetUserByEmailRequest) (user models.User, err error) {
+	user, err = service.db.GetUserByEmail(req.Email)
+	if err != nil {
+		if err == database.ErrNotFound {
+			service.loggingService.Print("FAIL", fmt.Sprintf("user not found. [Email=%s]", req.Email))
+			return user, ErrUserDoesNotExist
+		} else {
+			service.loggingService.Print("FAIL", fmt.Sprintf("failed to get user from database. [Email=%s] [Err=%s]", req.Email, err))
+			return user, err
+		}
+	}
+	return user, nil
+}
+
 func (service *Service) GetUsers(req GetUsersRequest) (data <-chan *models.User, err error) {
 	users, err := service.db.GetUsers(req.UserIDs)
 	if err != nil {
@@ -137,9 +151,11 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 	now := time.Now()
 	verificationCodeSource := fmt.Sprint(rand.Int())
 	verificationCode := verificationCodeSource[len(verificationCodeSource)-6:]
+	id, _ := uuid.NewV4()
+	email := strings.ToLower(req.Email)
 
 	tokenStr, err := token.GenerateToken(&VerifyClaims{
-		UserID:           req.Email,
+		UserID:           id.String(),
 		VerificationCode: verificationCode,
 	})
 	if err != nil {
@@ -147,9 +163,9 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 		return err
 	}
 
-	email := strings.ToLower(req.Email)
 	user := models.User{
-		ID:                    utils.ToPointer(email),
+		ID:                    utils.ToPointer(id.String()),
+		Email:                 utils.ToPointer(email),
 		Role:                  utils.ToPointer(req.Role),
 		Name:                  utils.ToPointer(strings.ToLower(req.Name)),
 		EmailVerified:         utils.ToPointer(false),
@@ -163,23 +179,23 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 		Data:                  utils.ToPointer(req.Data),
 	}
 
-	err = service.emailService.SendVerificationCode(tokenStr, *user.EmailVerificationCode, *user.ID, *user.Name, req.RedirectURL)
+	err = service.emailService.SendVerificationCode(tokenStr, *user.EmailVerificationCode, *user.Email, *user.Name, req.RedirectURL)
 	if err != nil {
 		// if this fails, user added in previous step should be removed. Ideally this step should not fail if the email address user have given is correct
-		service.loggingService.Print("FAIL", fmt.Sprintf("failed to email verification code [Email=%s]", *user.ID))
+		service.loggingService.Print("FAIL", fmt.Sprintf("failed to email verification code [Email=%s]", *user.Email))
 		return err
 	}
 
 	err = service.db.AddUser(user)
 	if err != nil {
 		if err == database.ErrConflict {
-			service.loggingService.Print("FAIL", fmt.Sprintf("user already exists [Email=%s]", *user.ID))
+			service.loggingService.Print("FAIL", fmt.Sprintf("user already exists [Email=%s]", *user.Email))
 			return ErrUserExists
 		}
 		return err
 	}
 
-	service.loggingService.Print("INFO", fmt.Sprintf("user registration successful [Email=%s]", *user.ID))
+	service.loggingService.Print("INFO", fmt.Sprintf("user registration successful [Email=%s]", *user.Email))
 
 	return nil
 
@@ -187,7 +203,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 
 func (service *Service) LoginUser(req LoginRequest) (res *LoginResponse, err error) {
 
-	user, err := service.db.GetUser(req.Email)
+	user, err := service.GetUserByEmail(GetUserByEmailRequest{Email: req.Email})
 	if err != nil {
 		if err == database.ErrNotFound {
 			service.loggingService.Print("FAIL", fmt.Sprintf("user not registered. [Email=%s]", req.Email))
@@ -213,7 +229,7 @@ func (service *Service) LoginUser(req LoginRequest) (res *LoginResponse, err err
 
 	tokenStr, err := token.GenerateToken(&AuthClaims{
 		UserID:    *user.ID,
-		UserEmail: req.Email,
+		UserEmail: *user.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute * time.Duration(config.JWT_TOKEN_LIFESPAN_IN_MINUTES))),
 		},
@@ -247,18 +263,19 @@ func (service *Service) VerifyEmail(req VerifyRequest) (err error) {
 	err = token.ValidateToken(req.Data, claims)
 
 	if err != nil {
-		errStr := fmt.Sprintf("token validation failed, %s", err)
+		errStr := fmt.Sprintf("invalid data, %s", req.Data)
 		service.loggingService.Print("FAIL", errStr)
 		return fmt.Errorf(errStr)
 	}
 
 	user, err := service.GetUser(GetUserRequest{UserID: claims.UserID})
 	if err != nil {
+		service.loggingService.Print("FAIL", "user does not exist [Email=%s]", *user.Email)
 		return err
 	}
 
 	if *user.EmailVerificationCode != claims.VerificationCode {
-		service.loggingService.Print("FAIL", "codes does not match %d vs %d", user.EmailVerificationCode, claims.VerificationCode)
+		service.loggingService.Print("FAIL", "codes does not match %s vs %s", *user.EmailVerificationCode, claims.VerificationCode)
 		return ErrIncorrectValidationCode
 	}
 
@@ -277,7 +294,7 @@ func (service *Service) VerifyEmail(req VerifyRequest) (err error) {
 }
 
 func (service *Service) ForgotPassword(req ForgotPasswordRequest) error {
-	user, err := service.GetUser(GetUserRequest{UserID: req.Email})
+	user, err := service.GetUserByEmail(GetUserByEmailRequest{Email: req.Email})
 	if err != nil {
 		if err == database.ErrNotFound {
 			service.loggingService.Print("FAIL", fmt.Sprintf("user not registered. [Email=%s]", req.Email))
@@ -292,7 +309,7 @@ func (service *Service) ForgotPassword(req ForgotPasswordRequest) error {
 	uuid, _ := uuid.NewV4()
 
 	tokenStr, err := token.GenerateToken(&ResetPasswordClaims{
-		UserEmail:         req.Email,
+		Email:             *user.Email,
 		PasswordResetCode: uuid.String(),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute * time.Duration(config.JWT_TOKEN_LIFESPAN_IN_MINUTES))),
@@ -313,9 +330,9 @@ func (service *Service) ForgotPassword(req ForgotPasswordRequest) error {
 		return err
 	}
 
-	err = service.emailService.SendPasswordResetCode(tokenStr, *user.ID, *user.Name, req.RedirectURL)
+	err = service.emailService.SendPasswordResetCode(tokenStr, *user.Email, *user.Name, req.RedirectURL)
 	if err != nil {
-		service.loggingService.Print("FAIL", fmt.Sprintf("failed to email password reset code [Email=%s]", *user.ID))
+		service.loggingService.Print("FAIL", fmt.Sprintf("failed to email password reset code [Email=%s]", *user.Email))
 		return err
 	}
 
@@ -339,17 +356,17 @@ func (service *Service) ResetPassword(req ResetPasswordRequest) error {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		service.loggingService.Print("FAIL", fmt.Sprintf("failed to hash password [Email=%s]", claims.UserEmail))
+		service.loggingService.Print("FAIL", fmt.Sprintf("failed to hash password [Email=%s]", claims.ID))
 		return err
 	}
 
-	user, err := service.GetUser(GetUserRequest{UserID: claims.UserEmail})
+	user, err := service.GetUserByEmail(GetUserByEmailRequest{Email: claims.Email})
 	if err != nil {
 		if err == database.ErrNotFound {
-			service.loggingService.Print("FAIL", fmt.Sprintf("user not registered. [Email=%s]", claims.UserEmail))
+			service.loggingService.Print("FAIL", fmt.Sprintf("user not registered. [Email=%s]", claims.Email))
 			return ErrUserDoesNotExist
 		} else {
-			service.loggingService.Print("FAIL", fmt.Sprintf("failed to get user from database. [Email=%s] [Err=%s]", claims.UserEmail, err))
+			service.loggingService.Print("FAIL", fmt.Sprintf("failed to get user from database. [Email=%s] [Err=%s]", claims.Email, err))
 			return err
 		}
 	}
@@ -374,7 +391,7 @@ func (service *Service) ResetPassword(req ResetPasswordRequest) error {
 		return err
 	}
 
-	service.loggingService.Print("INFO", fmt.Sprintf("successfully resetted password %s", claims.UserEmail))
+	service.loggingService.Print("INFO", fmt.Sprintf("successfully resetted password %s", claims.Email))
 	return nil
 }
 

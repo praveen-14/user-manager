@@ -41,6 +41,7 @@ type (
 
 		// ErrNotFound is returned if not found
 		GetUser(id string) (models.User, error)
+		GetUserByEmail(email string) (models.User, error)
 		GetUsers(ids []string) (<-chan *models.User, error)
 
 		ReadUsers(req ReadUsersRequest) (ReadUsersResponse, error) // total is not returned. Total can be fetched from a different API
