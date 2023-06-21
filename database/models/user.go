@@ -2,7 +2,7 @@ package models
 
 type (
 	User struct {
-		ID                     *string         `json:"id,omitempty"`    // randomly generated int
+		ID                     *string         `json:"id,omitempty"`    // randomly generated uuid
 		Email                  *string         `json:"email,omitempty"` // email
 		Password               *string         `json:"password,omitempty"`
 		Name                   *string         `json:"name,omitempty"`

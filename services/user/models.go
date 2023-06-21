@@ -7,9 +7,14 @@ import (
 )
 
 type (
-	AuthorizeRequest struct {
-		Token string
-		Role  string
+	AuthorizeTokenRequest struct {
+		Token        string
+		AllowedRoles []string
+	}
+
+	AuthorizeUserRequest struct {
+		User         models.User
+		AllowedRoles []string
 	}
 
 	GetUserRequest struct {
@@ -22,12 +27,6 @@ type (
 
 	GetUsersRequest struct {
 		UserIDs []string
-	}
-
-	ValidateSessionRequest struct {
-		UserID string
-		Token  string
-		Role   string
 	}
 
 	RegisterRequest struct {
@@ -98,5 +97,16 @@ type (
 	UpdateUserRequest struct {
 		User *models.User
 		Name string
+	}
+
+	ReadUsersRequest struct {
+		Skip  int      `json:"skip"`
+		Limit int      `json:"limit"`
+		Roles []string `json:"roles"`
+	}
+
+	ReadUsersResponse struct {
+		IsLastPage bool           `json:"is_last_page"`
+		Users      []*models.User `json:"users"`
 	}
 )

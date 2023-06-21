@@ -30,6 +30,7 @@ const (
 	ErrIncorrectValidationCode    = utils.ConstError("Incorrect validation code")
 	ErrIncorrectPasswordResetCode = utils.ConstError("Incorrect password reset code")
 	ErrPasswordResetNotRequested  = utils.ConstError("Password reset not requested")
+	ErrUserRoleCannotBeEmpty      = utils.ConstError("Password reset not requested")
 )
 
 var (
@@ -58,29 +59,54 @@ func New(db database.Database) (*Service, error) {
 	return instance, err
 }
 
-func (service *Service) Authorize(req AuthorizeRequest) (user models.User, _ bool, err error) {
+func (service *Service) AuthorizeUser(req AuthorizeUserRequest) (err error) {
+
+	// check if user role is in allowed roles list
+	roleAllowed := false
+	for _, r := range req.AllowedRoles {
+		if r == *req.User.Role {
+			roleAllowed = true
+			break
+		}
+	}
+	if !roleAllowed {
+		err = fmt.Errorf("role not allowed [user role = %s] [allowed roles = %+v]", *req.User.Role, req.AllowedRoles)
+		return err
+	}
+
+	return nil
+}
+
+func (service *Service) AuthorizeToken(req AuthorizeTokenRequest) (user models.User, err error) {
+
+	// check if token is valid
 	claims := &AuthClaims{}
 	err = token.ValidateToken(req.Token, claims)
-
 	if err != nil {
 		errStr := fmt.Sprintf("token validation failed, %s", err)
 		service.loggingService.Print("FAIL", errStr)
-		return user, false, nil
+		return user, err
 	}
 
-	user, authorized, err := service.ValidateSession(ValidateSessionRequest{
-		UserID: claims.UserID,
-		Token:  req.Token,
-		Role:   req.Role,
-	})
-
-	if authorized {
-		return user, true, nil
-	} else {
-		errStr := "authorization failed (possible causes\n - mutiple user logins\n - unmatched user role)"
-		service.loggingService.Print("FAIL", errStr)
-		return user, false, nil
+	// check if user exists
+	user, err = service.GetUser(GetUserRequest{UserID: claims.UserID})
+	if err != nil {
+		service.loggingService.Print("FAIL", "failed to get user [REQ=%+v] [ERR=%s]", req, err)
+		return user, err
 	}
+
+	// check if the token is the most recently issued token for this user
+	if *user.Token != req.Token {
+		err = fmt.Errorf("this token is no longer valid. A new token has been issued. please use that new token [provided token = %s]", req.Token)
+		return user, err
+	}
+
+	err = service.AuthorizeUser(AuthorizeUserRequest{User: user, AllowedRoles: req.AllowedRoles})
+	if err != nil {
+		return user, err
+	}
+
+	return user, nil
 }
 
 func (service *Service) GetUser(req GetUserRequest) (user models.User, err error) {
@@ -118,22 +144,6 @@ func (service *Service) GetUsers(req GetUsersRequest) (data <-chan *models.User,
 		return data, err
 	}
 	return users, nil
-}
-
-func (service *Service) ValidateSession(req ValidateSessionRequest) (user models.User, isValid bool, err error) {
-	user, err = service.GetUser(GetUserRequest{UserID: req.UserID})
-	if err != nil {
-		return user, isValid, err
-	}
-	if *user.Token == req.Token {
-		if req.Role == "" {
-			isValid = true
-		}
-		if req.Role != "" && user.Role != nil && req.Role == *user.Role {
-			isValid = true
-		}
-	}
-	return user, isValid, nil
 }
 
 func (service *Service) RegisterUser(req RegisterRequest) (err error) {
@@ -433,4 +443,32 @@ func (service *Service) UpdateUser(req UpdateUserRequest) error {
 
 	service.loggingService.Print("INFO", fmt.Sprintf("successfully updated user info!"))
 	return nil
+}
+
+func (service *Service) ReadUsers(req ReadUsersRequest) (res ReadUsersResponse, err error) {
+	out, err := service.db.ReadUsers(database.ReadUsersRequest{
+		ReadRequest: database.ReadRequest{
+			Skip:      req.Skip,
+			Limit:     req.Limit + 1, // reads extra item to check if the last page has reached
+			SortOrder: database.OrderAsc,
+		},
+		SortField: database.SortFieldsMap.UserSortFields.Name,
+		Roles:     req.Roles,
+	})
+	if err != nil {
+		service.loggingService.Print("FAIL", fmt.Sprintf("failed to read users from db [REQ=%+v]", req))
+		return res, err
+	}
+
+	res.Users = utils.ChanToSlice(out.Channel)
+	if len(res.Users) != req.Limit+1 {
+		res.IsLastPage = true
+	}
+	if len(res.Users) > req.Limit {
+		res.Users = res.Users[:req.Limit]
+	}
+
+	service.loggingService.Print("INFO", fmt.Sprintf("successfully read users from db"))
+
+	return res, nil
 }

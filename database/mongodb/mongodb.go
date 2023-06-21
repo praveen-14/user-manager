@@ -77,7 +77,7 @@ func (db *MongoDB) AddUser(user models.User) error {
 
 func (db *MongoDB) UpdateUser(updates models.User, tagsToAdd, tagsToRemove []string) error {
 	coll := db.DB.Collection(UsersColName)
-	filter := bson.D{{Key: "_id", Value: updates.ID}}
+	filter := bson.M{"_id": updates.ID}
 	update := encode(updates)
 	full_update := map[string]any{}
 	full_update["$addToSet"] = map[string]any{"tags": map[string]any{"$each": tagsToAdd}}
@@ -93,7 +93,7 @@ func (db *MongoDB) UpdateUser(updates models.User, tagsToAdd, tagsToRemove []str
 
 func (db *MongoDB) GetUser(id string) (user models.User, err error) {
 	coll := db.DB.Collection(UsersColName)
-	filter := bson.D{{Key: "_id", Value: id}}
+	filter := bson.M{"_id": id}
 	data, err := coll.FindOne(context.TODO(), filter).DecodeBytes()
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -115,7 +115,7 @@ func (db *MongoDB) GetUser(id string) (user models.User, err error) {
 
 func (db *MongoDB) GetUserByEmail(email string) (user models.User, err error) {
 	coll := db.DB.Collection(UsersColName)
-	filter := bson.D{{Key: "email", Value: email}}
+	filter := bson.M{"email": email}
 	data, err := coll.FindOne(context.TODO(), filter).DecodeBytes()
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -136,11 +136,11 @@ func (db *MongoDB) GetUserByEmail(email string) (user models.User, err error) {
 }
 
 func (db *MongoDB) GetUsers(ids []string) (out <-chan *models.User, err error) {
-	filters := []bson.D{}
+	filters := bson.D{}
 	for _, id := range ids {
-		filters = append(filters, bson.D{{Key: "_id", Value: id}})
+		filters = append(filters, bson.E{Key: "_id", Value: id})
 	}
-	filter := bson.D{{Key: "$or", Value: filters}}
+	filter := bson.M{"$or": filters}
 
 	dataChan := make(chan *models.User, channelCapacity)
 
@@ -180,9 +180,10 @@ func (db *MongoDB) ReadUsers(req database.ReadUsersRequest) (res database.ReadUs
 		if req.SortOrder == database.OrderDesc {
 			mongoSortOrder = 0
 		}
-		opts.SetSort(bson.D{{Key: string(req.SortField), Value: mongoSortOrder}})
+		opts.SetSort(bson.M{string(req.SortField): mongoSortOrder})
 	}
 	deletedFilter := genDeletedQuery(req.Deleted)
+	rolesFilter := genRolesQuery(req.Roles)
 	readFilter, err := genReadQuery(opts, req.ReadRequest)
 
 	if err != nil {
@@ -190,13 +191,30 @@ func (db *MongoDB) ReadUsers(req database.ReadUsersRequest) (res database.ReadUs
 		return res, err
 	}
 
-	filters := bson.D{{Key: "$and", Value: []bson.D{deletedFilter, readFilter}}}
+	filtersArr := []bson.M{}
+	if len(deletedFilter) > 0 {
+		filtersArr = append(filtersArr, deletedFilter)
+	}
+	if len(rolesFilter) > 0 {
+		filtersArr = append(filtersArr, rolesFilter)
+	}
+	if len(readFilter) > 0 {
+		filtersArr = append(filtersArr, readFilter)
+	}
+
+	var filter any
+	if len(filtersArr) > 0 {
+		filter = bson.M{"$and": filtersArr}
+	}
+
+	// fmt.Printf("%+v\n\n", filter)
+	// fmt.Printf("%+v\n\n", opts)
 
 	go func() {
 		defer close(dataChan)
 
 		coll := db.DB.Collection(UsersColName)
-		cur, err := coll.Find(context.TODO(), filters, opts)
+		cur, err := coll.Find(context.TODO(), filter, opts)
 		if err != nil {
 			db.Logger.Print("FAIL", "reading users failed, req = %+v, err = %s", req, err)
 			return
@@ -235,40 +253,53 @@ func decode[T any](_obj map[string]interface{}, objPointer *T) {
 	utils.ToObj(_obj, objPointer)
 }
 
-func genReadQuery(opts *options.FindOptions, req database.ReadRequest) (filters bson.D, err error) {
-	filtersArr := []bson.D{}
+func genReadQuery(opts *options.FindOptions, req database.ReadRequest) (filters bson.M, err error) {
+	filtersArr := []bson.M{}
 
 	if req.CreatedFrom != 0 {
-		filtersArr = append(filtersArr, bson.D{{Key: "created_at", Value: bson.D{{Key: "$gt", Value: req.CreatedFrom}}}})
+		filtersArr = append(filtersArr, bson.M{"created_at": bson.M{"$gt": req.CreatedFrom}})
 	}
 
 	if req.CreatedTo != 0 {
-		filtersArr = append(filtersArr, bson.D{{Key: "created_at", Value: bson.D{{Key: "$lt", Value: req.CreatedFrom}}}})
+		filtersArr = append(filtersArr, bson.M{"created_at": bson.M{"$lt": req.CreatedFrom}})
 	}
 
 	if len(req.Tags) > 0 {
-		tagsArr := []bson.D{}
+		tagsArr := []bson.M{}
 		for t := range req.Tags {
-			tagsArr = append(tagsArr, bson.D{{Key: "tags", Value: t}})
+			tagsArr = append(tagsArr, bson.M{"tags": t})
 		}
-		filtersArr = append(filtersArr, bson.D{{Key: "$and", Value: filtersArr}})
+		filtersArr = append(filtersArr, bson.M{"$and": filtersArr})
 	}
 
-	filters = bson.D{{Key: "$and", Value: filtersArr}}
+	if len(filtersArr) > 0 {
+		filters = bson.M{"$and": filtersArr}
+	}
 
 	if req.Skip < 0 || req.Limit < 0 {
-		return nil, database.ErrBadParams
+		return filters, database.ErrBadParams
 	}
 	opts.SetSkip(int64(req.Skip)).SetLimit(int64(req.Limit))
 
 	return filters, nil
 }
 
-func genDeletedQuery(deletedStatus database.DeletedStatus) bson.D {
+func genDeletedQuery(deletedStatus database.DeletedStatus) bson.M {
 	if deletedStatus == database.DeletedYes {
-		return bson.D{{Key: "deleted", Value: true}}
+		return bson.M{"deleted": true}
 	} else if deletedStatus == database.DeletedNo {
-		return bson.D{{Key: "deleted", Value: false}}
+		return bson.M{"deleted": false}
 	}
-	return bson.D{}
+	return bson.M{}
+}
+
+func genRolesQuery(roles []string) bson.M {
+	if len(roles) > 0 {
+		filtersArr := []bson.M{}
+		for _, r := range roles {
+			filtersArr = append(filtersArr, bson.M{"role": r})
+		}
+		return bson.M{"$or": filtersArr}
+	}
+	return bson.M{}
 }

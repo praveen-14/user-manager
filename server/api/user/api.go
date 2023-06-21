@@ -170,7 +170,10 @@ func (api *Api) LoginUser(c *gin.Context) {
 // @Param 		Authorization 		header 		string 				true 	"Example: Bearer _token_"
 // @Router 		/user/info 	[post]
 func (api *Api) UserInfo(c *gin.Context) {
-	user := utils.GetValue[models.User](c, "user")
+	user, err := utils.GetValue[models.User](c, "user")
+	if err != nil {
+		utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+	}
 
 	res := UserInfoResponse{
 		// need to add other required fields
@@ -314,7 +317,11 @@ func (api *Api) UpdatePassword(c *gin.Context) {
 		return
 	}
 
-	if err := api.userService.UpdatePassword(userServiceMod.UpdatePasswordRequest{User: utils.GetValue[models.User](c, "user"), Password: req.Password, PasswordConfirm: req.PasswordConfirm}); err != nil {
+	user, err := utils.GetValue[models.User](c, "user")
+	if err != nil {
+		utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+	}
+	if err := api.userService.UpdatePassword(userServiceMod.UpdatePasswordRequest{User: *user, Password: req.Password, PasswordConfirm: req.PasswordConfirm}); err != nil {
 		if err == userServiceMod.ErrUserDoesNotExist {
 			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 			return
@@ -349,7 +356,11 @@ func (api *Api) UpdateInfo(c *gin.Context) {
 		return
 	}
 
-	if err := api.userService.UpdateUser(userServiceMod.UpdateUserRequest{User: utils.GetValue[*models.User](c, "user"), Name: req.Name}); err != nil {
+	user, err := utils.GetValue[models.User](c, "user")
+	if err != nil {
+		utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+	}
+	if err := api.userService.UpdateUser(userServiceMod.UpdateUserRequest{User: user, Name: req.Name}); err != nil {
 		if err == userServiceMod.ErrUserDoesNotExist {
 			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 			return

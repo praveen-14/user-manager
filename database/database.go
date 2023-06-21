@@ -77,6 +77,7 @@ type (
 		ReadRequest
 		SortField UserSortField
 		Deleted   DeletedStatus
+		Roles     []string
 	}
 
 	ReadUsersResponse struct {

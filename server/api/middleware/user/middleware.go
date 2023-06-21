@@ -44,25 +44,41 @@ func New(db database.Database) (*Middleware, error) {
 	return instance, err
 }
 
+// if the user is already in the context, that user object will be reused without taking user from database
 func (middleware *Middleware) GenAuthorizer(req GenAuthorizerRequest) func(c *gin.Context) {
 
 	fn := func(c *gin.Context) {
-		user, authorized, _ := middleware.userService.Authorize(userService.AuthorizeRequest{Token: token.ExtractToken(c), Role: req.Role})
-		if !authorized {
-			c.String(http.StatusUnauthorized, "token validation failed")
+		user, err := utils.GetValue[models.User](c, "user")
+		var authError error
+		if err != nil { // user not in context
+			_user, _authError := middleware.userService.AuthorizeToken(userService.AuthorizeTokenRequest{Token: token.ExtractToken(c), AllowedRoles: req.AllowedRoles})
+			user = &_user
+			authError = _authError
+		} else {
+			authError = middleware.userService.AuthorizeUser(userService.AuthorizeUserRequest{User: *user, AllowedRoles: req.AllowedRoles})
+		}
+
+		if authError != nil {
+			middleware.loggingService.Print("INFO", "authorization failed [ERR=%s]", err)
+			c.String(http.StatusUnauthorized, "authorization failed")
 			c.Abort()
 			return
-
 		}
-		c.Set("user", user)
+		c.Set("user", *user)
 		c.Next()
+		return
 	}
 
 	return fn
 }
 
 func (middleware *Middleware) VerifyMiddleware(c *gin.Context) {
-	user := utils.GetValue[models.User](c, "user")
+	user, err := utils.GetValue[models.User](c, "user")
+	if err != nil {
+		c.String(http.StatusUnauthorized, "Server error! :(")
+		c.Abort()
+		return
+	}
 	if !*user.EmailVerified {
 		c.String(http.StatusUnauthorized, "Please verify your email")
 		c.Abort()

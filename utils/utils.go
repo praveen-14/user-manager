@@ -71,12 +71,13 @@ func ToObj[T any](dict any, objPtr *T) {
 	}
 }
 
-func GetValue[T any](c *gin.Context, key string) T {
+func GetValue[T any](c *gin.Context, key string) (*T, error) {
 	v, ok := c.Get(key)
 	if !ok {
-		panic(fmt.Sprintf("key '%s' not found in context", key))
+		return nil, fmt.Errorf("key '%s' not found in context", key)
 	}
-	return v.(T)
+	out := v.(T)
+	return &out, nil
 }
 
 func GetAllFilenames(efs *embed.FS) (files []string, err error) {
@@ -151,4 +152,12 @@ func Respond(c *gin.Context, logger *logger.Service, code int, message string, d
 	// rw.WriteHeader(code)
 	// rw.Write()
 
+}
+
+func ChanToSlice[T any](input <-chan T) []T {
+	output := make([]T, 0)
+	for i := range input {
+		output = append(output, i)
+	}
+	return output
 }
