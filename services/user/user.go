@@ -412,36 +412,34 @@ func (service *Service) UpdatePassword(req UpdatePasswordRequest) error {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		service.loggingService.Print("FAIL", fmt.Sprintf("failed to hash password [ID=%d]", req.User.ID))
+		service.loggingService.Print("FAIL", fmt.Sprintf("failed to hash password [ID=%s]", req.UserID))
 		return err
 	}
 
-	now := time.Now()
-	userUpdates := models.User{ID: req.User.ID}
-	userUpdates.UpdatedAt = utils.ToPointer(now.UnixMilli())
-	userUpdates.Password = utils.ToPointer(string(hashedPassword))
-
-	err = service.db.UpdateUser(userUpdates, []string{}, []string{})
+	err = service.UpdateUser(UpdateUserRequest{UserID: req.UserID, Password: utils.ToPointer(string(hashedPassword))})
 	if err != nil {
 		return err
 	}
 
-	service.loggingService.Print("INFO", fmt.Sprintf("successfully updated password %d", req.User.ID))
+	service.loggingService.Print("INFO", fmt.Sprintf("successfully updated password %s", req.UserID))
 	return nil
 }
 
 func (service *Service) UpdateUser(req UpdateUserRequest) error {
 	now := time.Now()
-	userUpdates := models.User{ID: req.User.ID}
-	userUpdates.UpdatedAt = utils.ToPointer(now.UnixMilli())
-	userUpdates.Name = utils.ToPointer(req.Name)
+	updates := models.User{}
+	updates.ID = &req.UserID
+	updates.Name = req.Name
+	updates.Password = req.Password
+	updates.Data = req.Data
+	updates.UpdatedAt = utils.ToPointer(now.UnixMilli())
 
-	err := service.db.UpdateUser(userUpdates, []string{}, []string{})
+	err := service.db.UpdateUser(updates, []string{}, []string{})
 	if err != nil {
 		return err
 	}
 
-	service.loggingService.Print("INFO", fmt.Sprintf("successfully updated user info!"))
+	service.loggingService.Print("INFO", fmt.Sprintf("successfully updated user!"))
 	return nil
 }
 

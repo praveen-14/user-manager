@@ -321,7 +321,7 @@ func (api *Api) UpdatePassword(c *gin.Context) {
 	if err != nil {
 		utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 	}
-	if err := api.userService.UpdatePassword(userServiceMod.UpdatePasswordRequest{User: *user, Password: req.Password, PasswordConfirm: req.PasswordConfirm}); err != nil {
+	if err := api.userService.UpdatePassword(userServiceMod.UpdatePasswordRequest{UserID: *user.ID, Password: req.Password, PasswordConfirm: req.PasswordConfirm}); err != nil {
 		if err == userServiceMod.ErrUserDoesNotExist {
 			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 			return
@@ -360,7 +360,7 @@ func (api *Api) UpdateInfo(c *gin.Context) {
 	if err != nil {
 		utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 	}
-	if err := api.userService.UpdateUser(userServiceMod.UpdateUserRequest{User: user, Name: req.Name}); err != nil {
+	if err := api.userService.UpdateUser(userServiceMod.UpdateUserRequest{UserID: *user.ID, Name: &req.Name}); err != nil {
 		if err == userServiceMod.ErrUserDoesNotExist {
 			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 			return

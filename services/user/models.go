@@ -89,14 +89,16 @@ type (
 	}
 
 	UpdatePasswordRequest struct {
-		User            models.User
+		UserID          string
 		Password        string
 		PasswordConfirm string
 	}
 
 	UpdateUserRequest struct {
-		User *models.User
-		Name string
+		UserID   string
+		Password *string         // not updated if nil
+		Name     *string         // not updated if nil
+		Data     *map[string]any // not updated if nil
 	}
 
 	ReadUsersRequest struct {
