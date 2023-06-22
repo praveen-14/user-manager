@@ -161,3 +161,13 @@ func ChanToSlice[T any](input <-chan T) []T {
 	}
 	return output
 }
+
+func FitPageToLimit[T any](arr []T, limit int) (out []T, isLastPage bool) {
+	if len(arr) != limit+1 {
+		isLastPage = true
+	}
+	if len(arr) > limit {
+		arr = arr[:limit]
+	}
+	return arr, isLastPage
+}

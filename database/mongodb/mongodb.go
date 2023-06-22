@@ -136,9 +136,9 @@ func (db *MongoDB) GetUserByEmail(email string) (user models.User, err error) {
 }
 
 func (db *MongoDB) GetUsers(ids []string) (out <-chan *models.User, err error) {
-	filters := bson.D{}
+	filters := []bson.M{}
 	for _, id := range ids {
-		filters = append(filters, bson.E{Key: "_id", Value: id})
+		filters = append(filters, bson.M{"_id": id})
 	}
 	filter := bson.M{"$or": filters}
 
