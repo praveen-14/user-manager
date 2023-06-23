@@ -261,6 +261,7 @@ func (service *Service) LoginUser(req LoginRequest) (res *LoginResponse, err err
 	res = &LoginResponse{
 		Token: tokenStr,
 		Name:  *user.Name,
+		Role:  *user.Role,
 	}
 
 	return res, nil
