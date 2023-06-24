@@ -55,7 +55,7 @@ type (
 	LoginResponse struct {
 		Token string `json:"token"`
 		Name  string `json:"name"`
-		Role  string `json:"name"`
+		Role  string `json:"role"`
 	}
 
 	AuthUserInfo struct {
