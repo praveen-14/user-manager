@@ -59,8 +59,12 @@ func (middleware *Middleware) GenAuthorizer(req GenAuthorizerRequest) func(c *gi
 		}
 
 		if authError != nil {
+			if authError == userService.ErrSessionTimedOut {
+				utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, "session timed-out", ":(")
+
+			}
 			middleware.loggingService.Print("INFO", "authorization failed [ERR=%s]", err)
-			c.String(http.StatusUnauthorized, "authorization failed")
+			utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, "authorization failed", ":(")
 			c.Abort()
 			return
 		}
@@ -75,12 +79,12 @@ func (middleware *Middleware) GenAuthorizer(req GenAuthorizerRequest) func(c *gi
 func (middleware *Middleware) VerifyMiddleware(c *gin.Context) {
 	user, err := utils.GetValue[models.User](c, "user")
 	if err != nil {
-		c.String(http.StatusUnauthorized, "Server error! :(")
+		utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, "Server error!", ":(")
 		c.Abort()
 		return
 	}
 	if !*user.EmailVerified {
-		c.String(http.StatusUnauthorized, "Please verify your email")
+		utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, "email not verified", ":(")
 		c.Abort()
 		return
 	}

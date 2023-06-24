@@ -31,6 +31,7 @@ const (
 	ErrIncorrectPasswordResetCode = utils.ConstError("Incorrect password reset code")
 	ErrPasswordResetNotRequested  = utils.ConstError("Password reset not requested")
 	ErrUserRoleCannotBeEmpty      = utils.ConstError("Password reset not requested")
+	ErrSessionTimedOut            = utils.ConstError("session timed out")
 )
 
 var (
@@ -83,8 +84,11 @@ func (service *Service) AuthorizeToken(req AuthorizeTokenRequest) (user models.U
 	claims := &AuthClaims{}
 	err = token.ValidateToken(req.Token, claims)
 	if err != nil {
-		errStr := fmt.Sprintf("token validation failed, %s", err)
-		service.loggingService.Print("FAIL", errStr)
+		if err == token.ErrSessionTimedOut {
+			service.loggingService.Print("INFO", "failed to authroize token, session is timed out")
+			return user, ErrSessionTimedOut
+		}
+		service.loggingService.Print("INFO", "failed to authroize token, [ERR=%s]", err)
 		return user, err
 	}
 

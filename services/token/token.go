@@ -4,9 +4,14 @@ import (
 	"strings"
 
 	"github.com/praveen-14/user-manager/config"
+	"github.com/praveen-14/user-manager/utils"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+)
+
+const (
+	ErrSessionTimedOut = utils.ConstError("session timed out")
 )
 
 func GenerateToken[T jwt.Claims](claims T) (string, error) {
@@ -18,6 +23,9 @@ func ValidateToken[T jwt.Claims](token string, claims T) (err error) {
 	_, err = jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(config.API_SECRET), nil
 	})
+	if err.(jwt.ValidationError).Errors == jwt.ValidationErrorExpired {
+		return ErrSessionTimedOut
+	}
 	return err
 }
 
