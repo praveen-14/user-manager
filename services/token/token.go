@@ -23,7 +23,7 @@ func ValidateToken[T jwt.Claims](token string, claims T) (err error) {
 	_, err = jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(config.API_SECRET), nil
 	})
-	if err.(jwt.ValidationError).Errors == jwt.ValidationErrorExpired {
+	if err != nil && err.(jwt.ValidationError).Errors == jwt.ValidationErrorExpired {
 		return ErrSessionTimedOut
 	}
 	return err
