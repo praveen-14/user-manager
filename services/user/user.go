@@ -13,6 +13,7 @@ import (
 	"github.com/praveen-14/user-manager/services/email"
 	"github.com/praveen-14/user-manager/services/logger"
 	"github.com/praveen-14/user-manager/services/token"
+	"github.com/praveen-14/user-manager/services/validation"
 	"github.com/praveen-14/user-manager/utils"
 
 	"github.com/gofrs/uuid"
@@ -32,6 +33,7 @@ const (
 	ErrPasswordResetNotRequested  = utils.ConstError("Password reset not requested")
 	ErrUserRoleCannotBeEmpty      = utils.ConstError("Password reset not requested")
 	ErrSessionTimedOut            = utils.ConstError("session timed out")
+	ErrInternal                   = utils.ConstError("internal error pccurred")
 )
 
 var (
@@ -42,20 +44,21 @@ var (
 type Service struct {
 	db database.Database
 
-	loggingService *logger.Service
-	emailService   *email.Service
+	loggingService    *logger.Service
+	emailService      *email.Service
+	validationService *validation.Service
 }
 
 func New(db database.Database) (*Service, error) {
 	var err error
 	once.Do(func() {
-		emailService, err1 := email.New()
-		err = err1
 		instance = &Service{
 			loggingService: logger.New("user-service", 0),
-			emailService:   emailService,
 			db:             db,
 		}
+		instance.emailService, err = email.New()
+		instance.validationService, err = validation.New()
+
 	})
 	return instance, err
 }
@@ -155,6 +158,21 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 	if req.Password != req.PasswordConfirm {
 		return ErrPasswordDoesNotMatch
 	}
+	err = service.validationService.ValidatePassword(req.Password)
+	if err != nil {
+		service.loggingService.Print("INFO", fmt.Sprintf("failed to register user"))
+		return err
+	}
+	req.Email, err = service.validationService.ValidateEmail(req.Email)
+	if err != nil {
+		service.loggingService.Print("INFO", fmt.Sprintf("failed to register user"))
+		return err
+	}
+	req.MobileNumber, err = service.validationService.ValidateSriLankanPhoneNumber(req.MobileNumber)
+	if err != nil {
+		service.loggingService.Print("INFO", fmt.Sprintf("failed to register user"))
+		return err
+	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -174,7 +192,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 	})
 	if err != nil {
 		service.loggingService.Print("FAIL", fmt.Sprintf("failed to generate jwt token [Email=%s] [Err=%s]", req.Email, err))
-		return err
+		return ErrInternal
 	}
 
 	user := models.User{
@@ -197,7 +215,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 	if err != nil {
 		// if this fails, user added in previous step should be removed. Ideally this step should not fail if the email address user have given is correct
 		service.loggingService.Print("FAIL", fmt.Sprintf("failed to email verification code [Email=%s]", *user.Email))
-		return err
+		return ErrInternal
 	}
 
 	err = service.db.AddUser(user)
@@ -206,7 +224,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 			service.loggingService.Print("FAIL", fmt.Sprintf("user already exists [Email=%s]", *user.Email))
 			return ErrUserExists
 		}
-		return err
+		return ErrInternal
 	}
 
 	service.loggingService.Print("INFO", fmt.Sprintf("user registration successful [Email=%s]", *user.Email))

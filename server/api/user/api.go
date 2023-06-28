@@ -99,18 +99,15 @@ func (api *Api) RegisterUser(c *gin.Context) {
 		PasswordConfirm: req.PasswordConfirm,
 		RedirectURL:     req.RedirectURL,
 	}); err != nil {
-		if err == userServiceMod.ErrPasswordDoesNotMatch {
-			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Password doesn't match", utils.GetJsonBodyFromGinContext(c))
-			return
-		} else if err == userServiceMod.ErrUserExists {
-			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User already exists!", utils.GetJsonBodyFromGinContext(c))
-		} else {
+		if err == userServiceMod.ErrInternal {
 			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
-			return
+		} else {
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, err.Error(), utils.GetJsonBodyFromGinContext(c))
 		}
+		return
 	}
 
-	utils.Respond(c, api.loggingService, http.StatusOK, "User registartion successful!", req)
+	utils.Respond(c, api.loggingService, http.StatusCreated, "User registartion successful!", req)
 }
 
 // @Summary 	Login user
