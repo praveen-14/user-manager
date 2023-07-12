@@ -51,11 +51,11 @@ func (middleware *Middleware) GenAuthorizer(req GenAuthorizerRequest) func(c *gi
 		user, err := utils.GetValue[models.User](c, "user")
 		var authError error
 		if err != nil { // user not in context
-			_user, _authError := middleware.userService.AuthorizeToken(userService.AuthorizeTokenRequest{Token: token.ExtractToken(c), AllowedRoles: req.AllowedRoles})
+			_user, _authError := middleware.userService.AuthorizeToken(userService.AuthorizeTokenRequest{Token: token.ExtractToken(c), AllowedRolesRegex: req.AllowedRolesRegex})
 			user = &_user
 			authError = _authError
 		} else {
-			authError = middleware.userService.AuthorizeUser(userService.AuthorizeUserRequest{User: *user, AllowedRoles: req.AllowedRoles})
+			authError = middleware.userService.AuthorizeUser(userService.AuthorizeUserRequest{User: *user, AllowedRolesRegex: req.AllowedRolesRegex})
 		}
 
 		if authError != nil {
@@ -63,7 +63,7 @@ func (middleware *Middleware) GenAuthorizer(req GenAuthorizerRequest) func(c *gi
 				utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, "session timed-out", ":(")
 
 			}
-			middleware.loggingService.Print("INFO", "authorization failed [ERR=%s]", err)
+			middleware.loggingService.Print("INFO", "authorization failed [ERR=%s]", authError)
 			utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, "authorization failed", ":(")
 			c.Abort()
 			return
@@ -77,14 +77,14 @@ func (middleware *Middleware) GenAuthorizer(req GenAuthorizerRequest) func(c *gi
 }
 
 func (middleware *Middleware) VerifyMiddleware(c *gin.Context) {
-	user, err := utils.GetValue[models.User](c, "user")
+	_user, err := utils.GetValue[models.User](c, "user")
 	if err != nil {
-		utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, "Server error!", ":(")
+		utils.Respond(c, middleware.loggingService, http.StatusInternalServerError, "Server error!", ":(")
 		c.Abort()
 		return
 	}
-	if !*user.EmailVerified {
-		utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, "email not verified", ":(")
+	if !*_user.EmailVerified {
+		utils.Respond(c, middleware.loggingService, http.StatusUnauthorized, user.ErrEmailNotVerified.Error(), ":(")
 		c.Abort()
 		return
 	}

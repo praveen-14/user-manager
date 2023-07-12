@@ -21,13 +21,15 @@ var (
 )
 
 type Api struct {
-	userService   *userServiceMod.Service
-	userMiddleare *userMiddleware.Middleware
+	userService              *userServiceMod.Service
+	userMiddleare            *userMiddleware.Middleware
+	loginChecks              []func(*models.User) error
+	loginChecksErrorMessages map[error]string
 
 	loggingService *logger.Service
 }
 
-func New(db database.Database) (*Api, error) {
+func New(db database.Database, loginChecks []func(*models.User) error, loginChecksErrorMessages map[error]string) (*Api, error) {
 	var err error
 	once.Do(func() {
 		userService, err1 := userServiceMod.New(db)
@@ -43,9 +45,11 @@ func New(db database.Database) (*Api, error) {
 		}
 
 		instance = &Api{
-			loggingService: logger.New("user-api", 0),
-			userService:    userService,
-			userMiddleare:  userMiddleware,
+			loggingService:           logger.New("user-api", 0),
+			userService:              userService,
+			userMiddleare:            userMiddleware,
+			loginChecks:              loginChecks,
+			loginChecksErrorMessages: loginChecksErrorMessages,
 		}
 
 	})
@@ -57,13 +61,13 @@ func (api *Api) AddRoutesTo(router *gin.RouterGroup) {
 	{
 		// public apis
 		routerGrp.POST("/register", func(c *gin.Context) { api.RegisterUser(c) })
-		routerGrp.POST("/login", func(c *gin.Context) { api.LoginUser(c) })
 		routerGrp.POST("/forgot-password", func(c *gin.Context) { api.ForgotPassword(c) })
 		routerGrp.POST("/reset-password", func(c *gin.Context) { api.ResetPassword(c) })
 		routerGrp.POST("/verify-email", func(c *gin.Context) { api.VerifyEmail(c) })
+		routerGrp.POST("/login", func(c *gin.Context) { api.LoginUser(c) })
 
 		// apis added after this middleware cannot be invoked without logging in
-		routerGrp.Use(api.userMiddleare.GenAuthorizer(userMiddleware.GenAuthorizerRequest{}))
+		routerGrp.Use(api.userMiddleare.GenAuthorizer(userMiddleware.GenAuthorizerRequest{AllowedRolesRegex: ".*"}))
 
 		// apis added after this middleware cannot be invoked without verifying the email
 		routerGrp.Use(api.userMiddleare.VerifyMiddleware)
@@ -137,13 +141,21 @@ func (api *Api) LoginUser(c *gin.Context) {
 		ip = c.Request.RemoteAddr
 	}
 
-	res, err := api.userService.LoginUser(userServiceMod.LoginRequest{Email: req.Email, Password: req.Password, IP: ip})
+	res, err := api.userService.LoginUser(userServiceMod.LoginRequest{Email: req.Email, Password: req.Password, IP: ip, LoginChecks: api.loginChecks})
 	if err != nil {
+		value, exists := api.loginChecksErrorMessages[err]
+		if exists {
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, value, utils.GetJsonBodyFromGinContext(c))
+			return
+		}
+
 		switch err {
 		case userServiceMod.ErrUserDoesNotExist:
 			utils.Respond(c, api.loggingService, http.StatusBadRequest, "User not registered!", utils.GetJsonBodyFromGinContext(c))
 		case userServiceMod.ErrIncorrectPassword:
 			utils.Respond(c, api.loggingService, http.StatusBadRequest, "Incorrect password!", utils.GetJsonBodyFromGinContext(c))
+		case userServiceMod.ErrEmailNotVerified:
+			utils.Respond(c, api.loggingService, http.StatusBadRequest, userServiceMod.ErrEmailNotVerified.Error(), utils.GetJsonBodyFromGinContext(c))
 		default:
 			utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
 		}

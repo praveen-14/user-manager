@@ -3,6 +3,7 @@ package user
 import (
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -31,9 +32,9 @@ const (
 	ErrIncorrectValidationCode    = utils.ConstError("Incorrect validation code")
 	ErrIncorrectPasswordResetCode = utils.ConstError("Incorrect password reset code")
 	ErrPasswordResetNotRequested  = utils.ConstError("Password reset not requested")
-	ErrUserRoleCannotBeEmpty      = utils.ConstError("Password reset not requested")
 	ErrSessionTimedOut            = utils.ConstError("session timed out")
 	ErrInternal                   = utils.ConstError("internal error pccurred")
+	ErrEmailNotVerified           = utils.ConstError("email not verified")
 )
 
 var (
@@ -65,16 +66,16 @@ func New(db database.Database) (*Service, error) {
 
 func (service *Service) AuthorizeUser(req AuthorizeUserRequest) (err error) {
 
-	// check if user role is in allowed roles list
-	roleAllowed := false
-	for _, r := range req.AllowedRoles {
-		if r == *req.User.Role {
-			roleAllowed = true
-			break
-		}
+	r, err := regexp.Compile(req.AllowedRolesRegex)
+	if err != nil {
+		service.loggingService.Print("FAIL", "failed to construct regular expression [REQ=%+v] [ERR=%s]", req, err)
+		return err
 	}
+
+	// check if user role is allowed by roles regular expression
+	roleAllowed := r.MatchString(*req.User.Role)
 	if !roleAllowed {
-		err = fmt.Errorf("role not allowed [user role = %s] [allowed roles = %+v]", *req.User.Role, req.AllowedRoles)
+		err = fmt.Errorf("role not allowed [user role = %s] [allowed roles = %+v]", *req.User.Role, req.AllowedRolesRegex)
 		return err
 	}
 
@@ -108,7 +109,7 @@ func (service *Service) AuthorizeToken(req AuthorizeTokenRequest) (user models.U
 		return user, err
 	}
 
-	err = service.AuthorizeUser(AuthorizeUserRequest{User: user, AllowedRoles: req.AllowedRoles})
+	err = service.AuthorizeUser(AuthorizeUserRequest{User: user, AllowedRolesRegex: req.AllowedRolesRegex})
 	if err != nil {
 		return user, err
 	}
@@ -253,6 +254,19 @@ func (service *Service) LoginUser(req LoginRequest) (res *LoginResponse, err err
 			return nil, ErrIncorrectPassword
 		} else {
 			service.loggingService.Print("FAIL", fmt.Sprintf("password verification failed [Email=%s] [Err=%s]", req.Email, err))
+			return nil, err
+		}
+	}
+
+	if config.BLOCK_LOGIN_WHEN_EMAIL_IS_NOT_VERIFIED && !*user.EmailVerified {
+		service.loggingService.Print("INFO", fmt.Sprintf("login blocked since email is not verified (check user module config) [Email=%s]", req.Email))
+		return nil, ErrEmailNotVerified
+	}
+
+	for i, f := range req.LoginChecks {
+		err = f(&user)
+		if err != nil {
+			service.loggingService.Print("INFO", "login check at index %d failed [REQ=%+v]", i, req)
 			return nil, err
 		}
 	}

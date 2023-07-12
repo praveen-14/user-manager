@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/praveen-14/user-manager/database"
+	"github.com/praveen-14/user-manager/database/models"
 	"github.com/praveen-14/user-manager/docs"
 	userApi "github.com/praveen-14/user-manager/server/api/user"
 	"github.com/praveen-14/user-manager/services/logger"
@@ -71,7 +72,7 @@ func New(db database.Database) (*Api, error) {
 			Engine:         r,
 		}
 
-		api.userApi, err = userApi.New(db)
+		api.userApi, err = userApi.New(db, []func(*models.User) error{}, map[error]string{})
 		if err != nil {
 			return
 		}
