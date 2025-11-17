@@ -77,7 +77,7 @@ func (service *Service) ValidatePassword(s string) (err error) {
 	}
 	minLetters := 7 // can be moved to config
 	if letters < minLetters || !number || !upper || !special {
-		return fmt.Errorf("password must contain at least %d letters, a special character, an uppercase letter and a number", minLetters)
+		return fmt.Errorf("Password must contain at least %d letters, a special character, an uppercase letter and a number", minLetters)
 	}
 	return nil
 }
