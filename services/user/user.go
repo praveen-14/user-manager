@@ -3,6 +3,7 @@ package user
 import (
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/praveen-14/user-manager/services/email"
 	"github.com/praveen-14/user-manager/services/logger"
 	"github.com/praveen-14/user-manager/services/token"
+	"github.com/praveen-14/user-manager/services/validation"
 	"github.com/praveen-14/user-manager/utils"
 
 	"github.com/gofrs/uuid"
@@ -30,7 +32,9 @@ const (
 	ErrIncorrectValidationCode    = utils.ConstError("Incorrect validation code")
 	ErrIncorrectPasswordResetCode = utils.ConstError("Incorrect password reset code")
 	ErrPasswordResetNotRequested  = utils.ConstError("Password reset not requested")
-	ErrUserRoleCannotBeEmpty      = utils.ConstError("Password reset not requested")
+	ErrSessionTimedOut            = utils.ConstError("session timed out")
+	ErrInternal                   = utils.ConstError("internal error pccurred")
+	ErrEmailNotVerified           = utils.ConstError("email not verified")
 )
 
 var (
@@ -41,36 +45,37 @@ var (
 type Service struct {
 	db database.Database
 
-	loggingService *logger.Service
-	emailService   *email.Service
+	loggingService    *logger.Service
+	emailService      *email.Service
+	validationService *validation.Service
 }
 
 func New(db database.Database) (*Service, error) {
 	var err error
 	once.Do(func() {
-		emailService, err1 := email.New()
-		err = err1
 		instance = &Service{
 			loggingService: logger.New("user-service", 0),
-			emailService:   emailService,
 			db:             db,
 		}
+		instance.emailService, err = email.New()
+		instance.validationService, err = validation.New()
+
 	})
 	return instance, err
 }
 
 func (service *Service) AuthorizeUser(req AuthorizeUserRequest) (err error) {
 
-	// check if user role is in allowed roles list
-	roleAllowed := false
-	for _, r := range req.AllowedRoles {
-		if r == *req.User.Role {
-			roleAllowed = true
-			break
-		}
+	r, err := regexp.Compile(req.AllowedRolesRegex)
+	if err != nil {
+		service.loggingService.Print("FAIL", "failed to construct regular expression [REQ=%+v] [ERR=%s]", req, err)
+		return err
 	}
+
+	// check if user role is allowed by roles regular expression
+	roleAllowed := r.MatchString(*req.User.Role)
 	if !roleAllowed {
-		err = fmt.Errorf("role not allowed [user role = %s] [allowed roles = %+v]", *req.User.Role, req.AllowedRoles)
+		err = fmt.Errorf("role not allowed [user role = %s] [allowed roles = %+v]", *req.User.Role, req.AllowedRolesRegex)
 		return err
 	}
 
@@ -83,8 +88,11 @@ func (service *Service) AuthorizeToken(req AuthorizeTokenRequest) (user models.U
 	claims := &AuthClaims{}
 	err = token.ValidateToken(req.Token, claims)
 	if err != nil {
-		errStr := fmt.Sprintf("token validation failed, %s", err)
-		service.loggingService.Print("FAIL", errStr)
+		if err == token.ErrSessionTimedOut {
+			service.loggingService.Print("INFO", "failed to authroize token, session is timed out")
+			return user, ErrSessionTimedOut
+		}
+		service.loggingService.Print("INFO", "failed to authroize token, [ERR=%s]", err)
 		return user, err
 	}
 
@@ -101,7 +109,7 @@ func (service *Service) AuthorizeToken(req AuthorizeTokenRequest) (user models.U
 		return user, err
 	}
 
-	err = service.AuthorizeUser(AuthorizeUserRequest{User: user, AllowedRoles: req.AllowedRoles})
+	err = service.AuthorizeUser(AuthorizeUserRequest{User: user, AllowedRolesRegex: req.AllowedRolesRegex})
 	if err != nil {
 		return user, err
 	}
@@ -151,6 +159,21 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 	if req.Password != req.PasswordConfirm {
 		return ErrPasswordDoesNotMatch
 	}
+	err = service.validationService.ValidatePassword(req.Password)
+	if err != nil {
+		service.loggingService.Print("INFO", fmt.Sprintf("failed to register user"))
+		return err
+	}
+	req.Email, err = service.validationService.ValidateEmail(req.Email)
+	if err != nil {
+		service.loggingService.Print("INFO", fmt.Sprintf("failed to register user"))
+		return err
+	}
+	req.MobileNumber, err = service.validationService.ValidateSriLankanPhoneNumber(req.MobileNumber)
+	if err != nil {
+		service.loggingService.Print("INFO", fmt.Sprintf("failed to register user"))
+		return err
+	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -170,7 +193,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 	})
 	if err != nil {
 		service.loggingService.Print("FAIL", fmt.Sprintf("failed to generate jwt token [Email=%s] [Err=%s]", req.Email, err))
-		return err
+		return ErrInternal
 	}
 
 	user := models.User{
@@ -193,7 +216,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 	if err != nil {
 		// if this fails, user added in previous step should be removed. Ideally this step should not fail if the email address user have given is correct
 		service.loggingService.Print("FAIL", fmt.Sprintf("failed to email verification code [Email=%s]", *user.Email))
-		return err
+		return ErrInternal
 	}
 
 	err = service.db.AddUser(user)
@@ -202,7 +225,7 @@ func (service *Service) RegisterUser(req RegisterRequest) (err error) {
 			service.loggingService.Print("FAIL", fmt.Sprintf("user already exists [Email=%s]", *user.Email))
 			return ErrUserExists
 		}
-		return err
+		return ErrInternal
 	}
 
 	service.loggingService.Print("INFO", fmt.Sprintf("user registration successful [Email=%s]", *user.Email))
@@ -235,6 +258,19 @@ func (service *Service) LoginUser(req LoginRequest) (res *LoginResponse, err err
 		}
 	}
 
+	if config.BLOCK_LOGIN_WHEN_EMAIL_IS_NOT_VERIFIED && !*user.EmailVerified {
+		service.loggingService.Print("INFO", fmt.Sprintf("login blocked since email is not verified (check user module config) [Email=%s]", req.Email))
+		return nil, ErrEmailNotVerified
+	}
+
+	for i, f := range req.LoginChecks {
+		err = f(&user)
+		if err != nil {
+			service.loggingService.Print("INFO", "login check at index %d failed [REQ=%+v]", i, req)
+			return nil, err
+		}
+	}
+
 	now := time.Now()
 
 	tokenStr, err := token.GenerateToken(&AuthClaims{
@@ -261,6 +297,7 @@ func (service *Service) LoginUser(req LoginRequest) (res *LoginResponse, err err
 	res = &LoginResponse{
 		Token: tokenStr,
 		Name:  *user.Name,
+		Role:  *user.Role,
 	}
 
 	return res, nil

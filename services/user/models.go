@@ -8,13 +8,13 @@ import (
 
 type (
 	AuthorizeTokenRequest struct {
-		Token        string
-		AllowedRoles []string
+		Token             string
+		AllowedRolesRegex string
 	}
 
 	AuthorizeUserRequest struct {
-		User         models.User
-		AllowedRoles []string
+		User              models.User
+		AllowedRolesRegex string
 	}
 
 	GetUserRequest struct {
@@ -47,14 +47,16 @@ type (
 	}
 
 	LoginRequest struct {
-		Email    string
-		Password string
-		IP       string
+		Email       string
+		Password    string
+		IP          string
+		LoginChecks []func(*models.User) error
 	}
 
 	LoginResponse struct {
 		Token string `json:"token"`
 		Name  string `json:"name"`
+		Role  string `json:"role"`
 	}
 
 	AuthUserInfo struct {

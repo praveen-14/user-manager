@@ -120,6 +120,7 @@ func (service *Service) SendPasswordResetCode(token string, email string, name s
 		"FirstName": name,
 		"Message":   "Here's the link to reset your password",
 		"BtnText":   "Reset Passowrd",
+		"ORG_NAME":  config.ORG_NAME,
 	}
 
 	err := service.Template.ExecuteTemplate(&body, "body.html", data)

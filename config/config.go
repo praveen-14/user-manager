@@ -5,6 +5,8 @@ var (
 	API_SECRET                    string
 	JWT_TOKEN_LIFESPAN_IN_MINUTES int
 
+	BLOCK_LOGIN_WHEN_EMAIL_IS_NOT_VERIFIED bool
+
 	DBUSER string
 	DBPASS string
 	DBHOST string
