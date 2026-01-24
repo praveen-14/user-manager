@@ -1,8 +1,11 @@
 package user
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/praveen-14/user-manager/database"
@@ -84,7 +87,7 @@ func (api *Api) AddRoutesTo(router *gin.RouterGroup) {
 // @Accept  	json
 // @Produce  	json
 // @Param       user   				body      	RegisterRequest 	true  	"User data"
-// @Success 	200 				{object} 	utils.Response
+// @Success 	200 				{object} 	user.Response
 // @Router 		/user/register 		[post]
 func (api *Api) RegisterUser(c *gin.Context) {
 
@@ -175,25 +178,121 @@ func (api *Api) LoginUser(c *gin.Context) {
 // @Description Get authenticated user's info
 // @Tags 		User
 // @Produce  	json
-// @Success 	200 			{object} 	user.AuthUserInfo
+// @Success 	200 			{object} 	user.UserInfoResponse
 // @Param 		Authorization 		header 		string 				true 	"Example: Bearer _token_"
 // @Router 		/user/info 	[post]
 func (api *Api) UserInfo(c *gin.Context) {
+	// Log REQUEST details
+	separator := strings.Repeat("=", 60)
+	fmt.Println("\n" + separator)
+	fmt.Println("REQUEST: /api/v1/user/info")
+	fmt.Println(separator)
+	fmt.Printf("Method: %s\n", c.Request.Method)
+	fmt.Printf("Path: %s\n", c.Request.URL.Path)
+	fmt.Printf("Client IP: %s\n", c.ClientIP())
+	fmt.Printf("User Agent: %s\n", c.Request.UserAgent())
+
+	// Log headers (excluding sensitive ones)
+	fmt.Println("\nHeaders:")
+	for key, values := range c.Request.Header {
+		if key != "Authorization" && key != "Cookie" {
+			fmt.Printf("  %s: %s\n", key, values[0])
+		} else if key == "Authorization" {
+			fmt.Printf("  %s: [REDACTED]\n", key)
+		}
+	}
+
+	// Log request body if present
+	var requestBody map[string]interface{}
+	if c.Request.Body != nil && c.Request.ContentLength > 0 {
+		// Read the body
+		bodyBytes, _ := io.ReadAll(c.Request.Body)
+		// Restore the body for subsequent handlers
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		if len(bodyBytes) > 0 {
+			if err := c.ShouldBindJSON(&requestBody); err == nil {
+				fmt.Println("\nRequest Body:")
+				fmt.Printf("  %+v\n", requestBody)
+			} else {
+				fmt.Println("\nRequest Body:")
+				fmt.Printf("  %s\n", string(bodyBytes))
+			}
+		} else {
+			fmt.Println("\nRequest Body: (empty)")
+		}
+	} else {
+		fmt.Println("\nRequest Body: (empty)")
+	}
+	fmt.Println(separator + "\n")
+
 	user, err := utils.GetValue[models.User](c, "user")
 	if err != nil {
+		errorResponse := map[string]interface{}{
+			"code":    http.StatusInternalServerError,
+			"message": "Server Error!",
+			"data":    ":O",
+		}
+
+		// Log ERROR RESPONSE
+		fmt.Println(separator)
+		fmt.Println("RESPONSE: /api/v1/user/info")
+		fmt.Println(separator)
+		fmt.Printf("Status Code: %d\n", http.StatusInternalServerError)
+		fmt.Printf("Response: %+v\n", errorResponse)
+		fmt.Println(separator + "\n")
+
 		utils.Respond(c, api.loggingService, http.StatusInternalServerError, "Server Error!", ":O")
+		return
 	}
 
 	res := UserInfoResponse{
-		// need to add other required fields
 		Name: *user.Name,
 	}
 
-	// user, err := api.userService.AuthUserInfo(userID)
-	// if err != nil {
-	// 	utils.Respond(c, api.loggingService, http.StatusUnauthorized, "Unable to get user info!", ":0")
-	// 	return
-	// }
+	if user.ID != nil {
+		res.ID = *user.ID
+	}
+	if user.Email != nil {
+		res.Email = *user.Email
+	}
+	if user.Role != nil {
+		res.Role = user.Role
+	}
+	if user.MobileNumber != nil {
+		res.MobileNumber = user.MobileNumber
+	}
+	if user.EmailVerified != nil {
+		res.EmailVerified = user.EmailVerified
+	}
+	if user.UserVerified != nil {
+		res.UserVerified = user.UserVerified
+	}
+	if user.CreatedAt != nil {
+		res.CreatedAt = user.CreatedAt
+	}
+	if user.UpdatedAt != nil {
+		res.UpdatedAt = user.UpdatedAt
+	}
+	if user.LastLoggedInAt != nil {
+		res.LastLoggedInAt = user.LastLoggedInAt
+	}
+	if user.Tags != nil {
+		res.Tags = *user.Tags
+	}
+	if user.Data != nil {
+		res.Data = *user.Data
+	}
+
+	// Log SUCCESS RESPONSE
+	fmt.Println(separator)
+	fmt.Println("RESPONSE: /api/v1/user/info")
+	fmt.Println(separator)
+	fmt.Printf("Status Code: %d\n", http.StatusOK)
+	fmt.Printf("Message: %s\n", fmt.Sprintf("Welcome back %s!", *user.Name))
+	fmt.Println("\nResponse Data:")
+	fmt.Printf("  %+v\n", res)
+	fmt.Println(separator + "\n")
 
 	utils.Respond(
 		c,
@@ -209,8 +308,8 @@ func (api *Api) UserInfo(c *gin.Context) {
 // @Tags 		User
 // @Accept  	json
 // @Produce  	json
-// @Param       data   			body      	VerifyRequest		  	true  	"data"
-// @Success 	200 			{object} 	utils.Response
+// @Param       data   			body      	VerifyEmailRequest		  	true  	"data"
+// @Success 	200 			{object} 	user.Response
 // @Router 		/user/verify-email 	[post]
 func (api *Api) VerifyEmail(c *gin.Context) {
 
@@ -244,7 +343,7 @@ func (api *Api) VerifyEmail(c *gin.Context) {
 // @Accept  	json
 // @Produce  	json
 // @Param       data   					body      	ForgotPasswordRequest		true  	"email"
-// @Success 	200 					{object} 	utils.Response
+// @Success 	200 					{object} 	user.Response
 // @Router 		/user/forgot-password 	[post]
 func (api *Api) ForgotPassword(c *gin.Context) {
 
@@ -274,7 +373,7 @@ func (api *Api) ForgotPassword(c *gin.Context) {
 // @Accept  	json
 // @Produce  	json
 // @Param       data   					body      	ResetPasswordRequest		true  	"reset password data"
-// @Success 	200 					{object} 	utils.Response
+// @Success 	200 					{object} 	user.Response
 // @Router 		/user/reset-password 	[post]
 func (api *Api) ResetPassword(c *gin.Context) {
 
@@ -314,7 +413,7 @@ func (api *Api) ResetPassword(c *gin.Context) {
 // @Produce  	json
 // @Param       data   					body      	UpdatePasswordRequest		true  	"update password data"
 // @Param 		Authorization 			header 		string 						true 	"Example: Bearer _token_"
-// @Success 	200 					{object} 	utils.Response
+// @Success 	200 					{object} 	user.Response
 // @Router 		/user/update-password 	[post]
 func (api *Api) UpdatePassword(c *gin.Context) {
 
@@ -353,7 +452,7 @@ func (api *Api) UpdatePassword(c *gin.Context) {
 // @Produce  	json
 // @Param       data   					body      	UpdateUserRequest		true  	"update user info data"
 // @Param 		Authorization 			header 		string 						true 	"Example: Bearer _token_"
-// @Success 	200 					{object} 	utils.Response[UpdateUserRequest]
+// @Success 	200 					{object} 	user.Response
 // @Router 		/user/update-info 		[post]
 func (api *Api) UpdateInfo(c *gin.Context) {
 

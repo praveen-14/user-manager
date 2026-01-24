@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/praveen-14/user-manager/database/mongodb"
+	"github.com/praveen-14/user-manager/database/postgres"
 	"github.com/praveen-14/user-manager/server"
 )
 
@@ -13,7 +13,7 @@ import (
 // }
 
 func main() {
-	db, err := mongodb.New()
+	db, err := postgres.New()
 	if err != nil {
 		log.Fatalf("connecting to database [ERR: %s]", err)
 	}

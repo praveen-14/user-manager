@@ -1,13 +1,14 @@
 package token
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/praveen-14/user-manager/config"
 	"github.com/praveen-14/user-manager/utils"
 
-	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	jwt "github.com/golang-jwt/jwt/v4"
 )
 
 const (
@@ -19,20 +20,35 @@ func GenerateToken[T jwt.Claims](claims T) (string, error) {
 	return token.SignedString([]byte(config.API_SECRET))
 }
 
-func ValidateToken[T jwt.Claims](token string, claims T) (err error) {
-	_, err = jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+func ValidateToken[T jwt.Claims](tokenStr string, claims T) error {
+	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(config.API_SECRET), nil
 	})
-	if err != nil && err.(*jwt.ValidationError).Errors == jwt.ValidationErrorExpired {
+	if err == nil {
+		return nil
+	}
+
+	var validationErr *jwt.ValidationError
+	if errors.As(err, &validationErr) && validationErr.Errors&jwt.ValidationErrorExpired != 0 {
 		return ErrSessionTimedOut
 	}
 	return err
 }
 
 func ExtractToken(c *gin.Context) string {
-	bearerToken := c.Request.Header.Get("Authorization")
-	if len(strings.Split(bearerToken, " ")) == 2 {
-		return strings.Split(bearerToken, " ")[1]
+	bearerToken := strings.TrimSpace(c.Request.Header.Get("Authorization"))
+	if bearerToken == "" {
+		return ""
+	}
+
+	parts := strings.Fields(bearerToken)
+	switch len(parts) {
+	case 1:
+		return parts[0]
+	case 2:
+		if strings.EqualFold(parts[0], "Bearer") {
+			return parts[1]
+		}
 	}
 	return ""
 }

@@ -9,6 +9,7 @@ type (
 		MobileNumber           *string         `json:"mobile_number,omitempty"`
 		Role                   *string         `json:"role,omitempty"`
 		EmailVerified          *bool           `json:"email_verified,omitempty"`
+		UserVerified           *bool           `json:"user_verified,omitempty"`
 		EmailVerificationCode  *string         `json:"email_verification_code,omitempty"`
 		PasswordResetCode      *string         `json:"password_reset_code,omitempty"`
 		PasswordResetRequested *bool           `json:"password_reset_requested,omitempty"`

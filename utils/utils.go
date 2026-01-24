@@ -113,11 +113,13 @@ func PrintObj(v any) {
 	fmt.Printf("%+v", v)
 }
 
+// Response represents a standard API response
+// @Description Standard API response structure
 type (
 	Response struct {
-		Code    int    `json:"code,omitempty"`
-		Message string `json:"message,omitempty"`
-		Data    any    `json:"data,omitempty"`
+		Code    int    `json:"code,omitempty" example:"200"`        // HTTP status code
+		Message string `json:"message,omitempty" example:"Success"` // Response message
+		Data    any    `json:"data,omitempty"`                      // Response data payload
 	}
 )
 

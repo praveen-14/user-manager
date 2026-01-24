@@ -498,7 +498,7 @@ func (service *Service) ReadUsers(req ReadUsersRequest) (res ReadUsersResponse, 
 	res.Users = utils.ChanToSlice(out.Channel)
 	res.Users, res.IsLastPage = utils.FitPageToLimit(res.Users, req.Limit)
 
-	service.loggingService.Print("INFO", fmt.Sprintf("successfully read users from db"))
+	service.loggingService.Print("INFO", fmt.Sprintf("successfully read users from db [COUNT=%d] [DATA=%s]", len(res.Users), utils.String(res.Users)))
 
 	return res, nil
 }

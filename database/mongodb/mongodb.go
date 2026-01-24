@@ -46,7 +46,15 @@ func New() (*MongoDB, error) {
 		// Use the SetServerAPIOptions() method to set the Stable API version to 1
 		serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 
-		opts := options.Client().ApplyURI(fmt.Sprintf(`mongodb://%s:%s@%s:%d`, config.DBUSER, config.DBPASS, config.DBHOST, config.DBPORT)).SetServerAPIOptions(serverAPI)
+		var uri string
+		if config.MongoDBUser != "" && config.MongoDBPassword != "" {
+			// Use authentication
+			uri = fmt.Sprintf(`mongodb://%s:%s@%s:%d`, config.MongoDBUser, config.MongoDBPassword, config.MongoDBHost, config.MongoDBPort)
+		} else {
+			// No authentication
+			uri = fmt.Sprintf(`mongodb://%s:%d`, config.MongoDBHost, config.MongoDBPort)
+		}
+		opts := options.Client().ApplyURI(uri).SetServerAPIOptions(serverAPI)
 
 		// Create a new client and connect to the server
 		client, err := mongo.Connect(context.TODO(), opts)
@@ -54,7 +62,7 @@ func New() (*MongoDB, error) {
 			return nil, err
 		}
 		instance.Client = client
-		instance.DB = client.Database(config.DBNAME)
+		instance.DB = client.Database(config.MongoDBName)
 	}
 	return instance, nil
 }
@@ -78,11 +86,29 @@ func (db *MongoDB) AddUser(user models.User) error {
 func (db *MongoDB) UpdateUser(updates models.User, tagsToAdd, tagsToRemove []string) error {
 	coll := db.DB.Collection(UsersColName)
 	filter := bson.M{"_id": updates.ID}
-	update := encode(updates)
+
+	// Create a copy of updates and clear Tags field to prevent conflicts
+	// Tags are handled separately via $addToSet and $pull
+	updatesCopy := updates
+	updatesCopy.Tags = nil
+
+	update := encode(updatesCopy)
+	// Remove _id from $set since it's immutable and cannot be updated
+	delete(update, "_id")
+	// Also explicitly remove tags in case it was encoded somehow
+	delete(update, "tags")
+	delete(update, "Tags")
+
 	full_update := map[string]any{}
-	full_update["$addToSet"] = map[string]any{"tags": map[string]any{"$each": tagsToAdd}}
-	full_update["$pull"] = map[string]any{"list": map[string]any{"$in": tagsToRemove}}
-	full_update["$set"] = update
+	if len(tagsToAdd) > 0 {
+		full_update["$addToSet"] = map[string]any{"tags": map[string]any{"$each": tagsToAdd}}
+	}
+	if len(tagsToRemove) > 0 {
+		full_update["$pull"] = map[string]any{"tags": map[string]any{"$in": tagsToRemove}}
+	}
+	if len(update) > 0 {
+		full_update["$set"] = update
+	}
 	_, err := coll.UpdateOne(context.TODO(), filter, full_update)
 	if err != nil {
 		db.Logger.Print("FAIL", fmt.Sprintf("updating user failed, id = %s [ERR=%s]", *updates.ID, err))
@@ -202,13 +228,14 @@ func (db *MongoDB) ReadUsers(req database.ReadUsersRequest) (res database.ReadUs
 		filtersArr = append(filtersArr, readFilter)
 	}
 
-	var filter any
+	var filter bson.M
 	if len(filtersArr) > 0 {
 		filter = bson.M{"$and": filtersArr}
+	} else {
+		filter = bson.M{} // Empty filter means find all documents
 	}
 
-	// fmt.Printf("%+v\n\n", filter)
-	// fmt.Printf("%+v\n\n", opts)
+	db.Logger.Print("INFO", fmt.Sprintf("ReadUsers: database=%s, collection=%s, filter = %+v", config.MongoDBName, UsersColName, filter))
 
 	go func() {
 		defer close(dataChan)
@@ -216,19 +243,33 @@ func (db *MongoDB) ReadUsers(req database.ReadUsersRequest) (res database.ReadUs
 		coll := db.DB.Collection(UsersColName)
 		cur, err := coll.Find(context.TODO(), filter, opts)
 		if err != nil {
-			db.Logger.Print("FAIL", "reading users failed, req = %+v, err = %s", req, err)
+			db.Logger.Print("FAIL", fmt.Sprintf("reading users failed, req = %+v, filter = %+v, err = %s", req, filter, err))
 			return
 		}
+		defer cur.Close(context.TODO())
 
+		docCount := 0
 		for cur.Next(context.TODO()) {
 			user := &models.User{}
 			m := make(map[string]any)
-			err := bson.Unmarshal(cur.Current, &m)
+			err := cur.Decode(&m)
 			if err != nil {
-				db.Logger.Fatalf("reading users [ERR: %s]", err)
+				db.Logger.Print("FAIL", fmt.Sprintf("reading users decode failed, req = %+v, err = %s", req, err))
+				continue
+			}
+			if m == nil || len(m) == 0 {
+				db.Logger.Print("FAIL", fmt.Sprintf("reading users failed, req = %+v, err = document is nil or empty", req))
+				continue
 			}
 			decode(m, user)
 			dataChan <- user
+			docCount++
+		}
+
+		db.Logger.Print("INFO", fmt.Sprintf("ReadUsers: successfully read %d documents from collection", docCount))
+
+		if err := cur.Err(); err != nil {
+			db.Logger.Print("FAIL", fmt.Sprintf("reading users cursor error, req = %+v, err = %s", req, err))
 		}
 
 	}()
@@ -261,15 +302,12 @@ func genReadQuery(opts *options.FindOptions, req database.ReadRequest) (filters 
 	}
 
 	if req.CreatedTo != 0 {
-		filtersArr = append(filtersArr, bson.M{"created_at": bson.M{"$lt": req.CreatedFrom}})
+		filtersArr = append(filtersArr, bson.M{"created_at": bson.M{"$lt": req.CreatedTo}})
 	}
 
 	if len(req.Tags) > 0 {
-		tagsArr := []bson.M{}
-		for t := range req.Tags {
-			tagsArr = append(tagsArr, bson.M{"tags": t})
-		}
-		filtersArr = append(filtersArr, bson.M{"$and": filtersArr})
+		// Use $all to match documents that contain all specified tags
+		filtersArr = append(filtersArr, bson.M{"tags": bson.M{"$all": req.Tags}})
 	}
 
 	if len(filtersArr) > 0 {
