@@ -61,23 +61,19 @@ func (service *Service) ValidateSriLankanPhoneNumber(number string) (_ string, e
 
 func (service *Service) ValidatePassword(s string) (err error) {
 	var number, upper, special bool
-	letters := 0
 	for _, c := range s {
 		switch {
 		case unicode.IsNumber(c):
 			number = true
 		case unicode.IsUpper(c):
 			upper = true
-			letters++
 		case unicode.IsPunct(c) || unicode.IsSymbol(c):
 			special = true
-		case unicode.IsLetter(c) || c == ' ':
-			letters++
 		}
 	}
-	minLetters := 7 // can be moved to config
-	if letters < minLetters || !number || !upper || !special {
-		return fmt.Errorf("Password must contain at least %d letters, a special character, an uppercase letter and a number", minLetters)
+	minChars := 7
+	if len([]rune(s)) < minChars || !number || !upper || !special {
+		return fmt.Errorf("Password must be at least %d characters and contain an uppercase letter, a number and a special character", minChars)
 	}
 	return nil
 }
